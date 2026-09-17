@@ -3,11 +3,17 @@ from collections.abc import Callable
 
 import gi
 
-gi.require_version("WebKit", "6.0")
+gi.require_version("WebView2Gtk", "1.0")
 
 from gettext import gettext as _
 
-from gi.repository import Adw, Gdk, GLib, Gtk, Pango, WebKit
+from gi.repository import Adw, Gdk, GLib, Gtk, Pango
+
+# WebView2Gtk has no PyGObject-stubs entry (it's this project's own fork's
+# GIR, not a package PyGObject-stubs ships) -- pyright cannot see it exists.
+from gi.repository import (
+    WebView2Gtk as WebKit,  # pyright: ignore[reportAttributeAccessIssue]
+)
 
 from . import mail_sync
 from .avatar_loader import AvatarLoader
@@ -38,44 +44,6 @@ AVATAR_SIZE = 40
 # Tall enough that most messages need no inner scrolling; the WebView can't
 # report its content height until after layout, so this is a fixed guess.
 BODY_HEIGHT = 800
-
-# An unrelated WebView costs its own web process: ~300 MB and up to 1.5 s to
-# start. Related views share one, so every message body hangs off this anchor,
-# which belongs to no conversation and so survives closing one. The composer's
-# WebView stays unrelated on purpose -- it runs JavaScript and must not share a
-# process with untrusted mail HTML.
-_anchor: WebKit.WebView | None = None
-
-
-def _ensure_anchor() -> WebKit.WebView:
-    global _anchor
-    if _anchor is not None:
-        return _anchor
-
-    # A mail body is rendered once and never navigated back to, so it needs
-    # none of the caches WEB_BROWSER (the default) keeps.
-    WebKit.WebContext.get_default().set_cache_model(WebKit.CacheModel.DOCUMENT_VIEWER)
-    _anchor = WebKit.WebView()
-    # The process starts on the first load, not on construction, so without
-    # this the anchor holds nothing and dies with the last message view.
-    _anchor.load_html("", None)
-    return _anchor
-
-
-def release_anchor() -> None:
-    """Shut the shared web process down; the next message body starts a new one.
-
-    Its ~300 MB is worth holding while the user is reading and not while the
-    window is hidden or closed, which is where the window calls this. Dropping
-    the last reference would leave the process up until the cyclic collector
-    ran; terminating is deterministic.
-    """
-    global _anchor
-
-    if _anchor is None:
-        return
-    _anchor.terminate_web_process()
-    _anchor = None
 
 
 def _build_names(email: Email, delivered_to: str) -> Gtk.Box:
@@ -141,6 +109,9 @@ class MessageView(Gtk.Box):
         self._placeholder: Gtk.Widget | None = None
         self._webview: WebKit.WebView | None = None
         self._html: str | None = None
+        # Set right before every load_html() call, consumed by the next
+        # decide_policy -- see its own comment for why.
+        self._own_load_pending = False
 
         self.raw: bytes | None = None
         self.parsed: message_parser.ParsedMessage | None = None
@@ -299,7 +270,12 @@ class MessageView(Gtk.Box):
             self._body.append(banner)
             self._images_banner = banner
 
-        webview = WebKit.WebView(related_view=_ensure_anchor())
+        webview = WebKit.WebView()
+        # Set before the first attach (on append below) -- avoids the flash
+        # of WebView2's own opaque-white default while it's brand new. Each
+        # message you click rebuilds its MessageView/WebView from scratch
+        # (see _render_thread), so without this every single click flashed.
+        webview.set_background_color(Gdk.RGBA(red=0, green=0, blue=0, alpha=0))
         webview.set_size_request(-1, BODY_HEIGHT)
         webview.connect("decide-policy", self._on_decide_policy)
         settings = webview.get_settings()
@@ -310,10 +286,8 @@ class MessageView(Gtk.Box):
         settings.set_enable_webaudio(False)
         settings.set_enable_webgl(False)
         settings.set_enable_back_forward_navigation_gestures(False)
-        # Clearing the accelerated surface avoids a black frame before WebKit
-        # paints; the GTK class supplies the white canvas expected by email HTML.
-        webview.set_background_color(Gdk.RGBA(red=0, green=0, blue=0, alpha=0))
         webview.add_css_class("message-html")
+        self._own_load_pending = True
         webview.load_html(self._sandboxed_html(), None)
         self._webview = webview
         self._body.append(webview)
@@ -335,8 +309,27 @@ class MessageView(Gtk.Box):
         _decision_type: WebKit.PolicyDecisionType,
     ) -> bool:
         # NAVIGATION_ACTION and NEW_WINDOW_ACTION are exactly the decisions
-        # carrying a navigation action; RESPONSE ones aren't ours to handle.
+        # carrying a navigation action; RESPONSE ones aren't ours to handle,
+        # and -- checked before _own_load_pending below -- must never consume
+        # it: a RESPONSE for an unrelated, already-decided navigation can
+        # arrive while it's set, and did in testing, wrongly eating the flag
+        # before the real navigation-action event for the pending load ever
+        # showed up.
         if not isinstance(decision, WebKit.NavigationPolicyDecision):
+            return False
+
+        if self._own_load_pending:
+            # WebKitGTK's load_html has no base URI, so its own document
+            # arrives as about:blank; WebView2's equivalent (NavigateToString,
+            # under load_html) instead fires this for a data:text/html;...
+            # URI it generates itself -- a real WebView2 quirk, confirmed by
+            # scripts/smoke_message_view.py, not a guess. Since this webview
+            # only ever calls load_html() right before this flag is set, the
+            # next NAVIGATION_ACTION decide_policy is that same self-inflicted
+            # navigation, not the document trying to leave -- consumed once,
+            # so a real meta-refresh etc. straight after still hits the
+            # checks below.
+            self._own_load_pending = False
             return False
 
         action = decision.get_navigation_action()
@@ -344,10 +337,6 @@ class MessageView(Gtk.Box):
         scheme = uri.partition(":")[0].lower()
 
         if action.get_navigation_type() != WebKit.NavigationType.LINK_CLICKED:
-            # load_html has no base URI, so its own document arrives as
-            # about:blank -- or with no URI at all. Neither can leak anything.
-            if scheme in ("about", ""):
-                return False
             decision.ignore()
             logger.warning("blocked navigation from a message body to %s", uri)
             return True
@@ -370,6 +359,7 @@ class MessageView(Gtk.Box):
             return
         self._should_load_remote_images = True
         self._images_banner.set_revealed(False)
+        self._own_load_pending = True
         self._webview.load_html(self._sandboxed_html(), None)
 
     def _populate_attachments(self, attachments: list[Attachment]) -> None:
@@ -414,10 +404,10 @@ class MessageView(Gtk.Box):
     def release(self) -> None:
         """Drop the body's widgets and bytes; the view is dead after this.
 
-        The web process stays up -- it belongs to the anchor, which every other
-        message shares, so `release_anchor` is what ends it. Disconnecting first
-        breaks the decide-policy cycle that would otherwise hold this page's
-        memory until the cyclic collector came round.
+        Disconnecting first breaks the decide-policy cycle that would
+        otherwise hold this page's memory until the cyclic collector came
+        round; unparenting then destroys the WebView, and with it its own
+        WebView2 host.
         """
         self._is_released = True
         if self._webview is not None:

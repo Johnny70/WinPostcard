@@ -78,17 +78,6 @@ def test_smtp_security_is_inferred_from_the_port(db):
     assert starttls.smtp_security == "starttls"
 
 
-def test_an_account_remembers_the_online_account_it_came_from(db):
-    # goa_id is what tells credential lookup to ask GNOME Online Accounts
-    # instead of the keyring, so it has to survive the round trip.
-    db.save_account("a@x", "A", "imap.x", 993, "smtp.x", 587, goa_id="account_1700_0")
-    typed_in = db.save_account("b@x", "B", "imap.x", 993, "smtp.x", 587)
-
-    imported, listed_typed_in = db.accounts()
-    assert imported.goa_id == "account_1700_0"
-    assert (listed_typed_in.id, listed_typed_in.goa_id) == (typed_in.id, "")
-
-
 def test_an_account_remembers_the_username_it_signs_in_with(db):
     db.save_account("a@x", "A", "imap.x", 993, "smtp.x", 587, username="a.short")
     db.save_account("b@x", "B", "imap.x", 993, "smtp.x", 587)
@@ -132,6 +121,102 @@ def test_get_or_create_folder_is_idempotent(db):
 def test_get_folder_by_name_when_absent(db):
     account = db.save_account("a@x", "A", "imap.x", 993, "smtp.x", 587)
     assert db.get_folder_by_name(account.id, "Nope") is None
+
+
+def test_get_folder_by_id(db, folder):
+    assert db.get_folder(folder.id).name == "INBOX"
+
+
+def test_get_folder_by_id_when_absent(db):
+    assert db.get_folder(999) is None
+
+
+# --- rules -------------------------------------------------------------
+
+
+def test_save_and_list_rules(db, folder):
+    account_id = folder.account_id
+    work = db.get_or_create_folder(account_id, "Work")
+    rule = db.save_rule(account_id, "boss@example.com", work.id)
+    assert rule.sender_address == "boss@example.com"
+    assert rule.folder_id == work.id
+    assert [r.sender_address for r in db.rules_for_account(account_id)] == [
+        "boss@example.com"
+    ]
+
+
+def test_saving_a_rule_for_the_same_sender_repoints_it_instead_of_duplicating(
+    db, folder
+):
+    account_id = folder.account_id
+    work = db.get_or_create_folder(account_id, "Work")
+    personal = db.get_or_create_folder(account_id, "Personal")
+    db.save_rule(account_id, "someone@example.com", work.id)
+    db.save_rule(account_id, "someone@example.com", personal.id)
+
+    rules = db.rules_for_account(account_id)
+    assert len(rules) == 1
+    assert rules[0].folder_id == personal.id
+
+
+def test_delete_rule(db, folder):
+    account_id = folder.account_id
+    work = db.get_or_create_folder(account_id, "Work")
+    rule = db.save_rule(account_id, "boss@example.com", work.id)
+    db.delete_rule(rule.id)
+    assert db.rules_for_account(account_id) == []
+
+
+def test_rules_are_scoped_to_their_account(db):
+    a = db.save_account("a@x", "A", "imap.x", 993, "smtp.x", 587)
+    b = db.save_account("b@x", "B", "imap.x", 993, "smtp.x", 587)
+    a_folder = db.get_or_create_folder(a.id, "INBOX")
+    db.save_rule(a.id, "x@example.com", a_folder.id)
+    assert db.rules_for_account(b.id) == []
+
+
+# --- email_id_for --------------------------------------------------------
+
+
+def test_email_id_for_a_synced_message(db, folder):
+    incoming(db, folder.id, "42")
+    email_id = db.email_id_for(folder.id, "42")
+    assert email_id is not None
+    assert db.emails_in_folder(folder.id)[0].id == email_id
+
+
+def test_email_id_for_when_absent(db, folder):
+    assert db.email_id_for(folder.id, "nope") is None
+
+
+def test_get_rule_by_id(db, folder):
+    work = db.get_or_create_folder(folder.account_id, "Work")
+    rule = db.save_rule(folder.account_id, "boss@example.com", work.id)
+    assert db.get_rule(rule.id).sender_address == "boss@example.com"
+
+
+def test_get_rule_by_id_when_absent(db):
+    assert db.get_rule(999) is None
+
+
+def test_emails_by_sender(db, folder):
+    incoming(db, folder.id, "1", sender_address="boss@example.com")
+    incoming(db, folder.id, "2", sender_address="someone-else@example.com")
+    matches = db.emails_by_sender(folder.id, "boss@example.com")
+    assert [email.sender_address for email in matches] == ["boss@example.com"]
+
+
+def test_emails_by_sender_excludes_locally_saved_uid_less_rows(db, folder):
+    db.save_email(
+        folder.id,
+        sender="Me",
+        sender_address="boss@example.com",
+        subject="Draft copy",
+        preview="",
+        date="",
+        is_unread=False,
+    )
+    assert db.emails_by_sender(folder.id, "boss@example.com") == []
 
 
 def test_prune_folders_deletes_a_whole_subtree_and_its_mail(db, folder):

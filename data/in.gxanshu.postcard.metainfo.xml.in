@@ -4,12 +4,12 @@
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
 
-  <name>Postcard</name>
-  <summary>A modern email client for GNOME</summary>
+  <name>WinPostcard</name>
+  <summary>A Windows email client built with GTK 4 and libadwaita</summary>
   <description>
     <p>
-      Postcard is a fast, modern email client for the GNOME desktop, built with GTK 4 and
-      libadwaita. It follows the same three-pane layout as Geary — folders, conversations,
+      WinPostcard is a Windows email client written in Python, built with GTK 4 and
+      libadwaita. It has the classic three-pane layout — folders, conversations,
       and reading pane — with a clean, native feel and nothing to configure to get started
       beyond your account details.
     </p>
@@ -33,9 +33,9 @@
     <name>Anshu</name>
   </developer>
 
-  <url type="homepage">https://github.com/gxanshu/postcard</url>
-  <url type="vcs-browser">https://github.com/gxanshu/postcard</url>
-  <url type="bugtracker">https://github.com/gxanshu/postcard/issues</url>
+  <url type="homepage">https://github.com/Johnny70/WinPostcard</url>
+  <url type="vcs-browser">https://github.com/Johnny70/WinPostcard</url>
+  <url type="bugtracker">https://github.com/Johnny70/WinPostcard/issues</url>
 
   <translation type="gettext">postcard</translation>
   <launchable type="desktop-id">in.gxanshu.postcard.desktop</launchable>
@@ -54,11 +54,20 @@
   <screenshots>
     <screenshot type="default">
       <caption>The three-pane layout with folders, conversations, and reader</caption>
-      <image>https://raw.githubusercontent.com/gxanshu/postcard/main/data/screenshots/main-window.png</image>
+      <image>https://raw.githubusercontent.com/Johnny70/WinPostcard/main/data/screenshots/main-window.png</image>
     </screenshot>
   </screenshots>
 
   <releases>
+    <release version="1.0.0b" date="2026-09-18">
+      <description translate="no">
+        <p>New in this release:</p>
+        <ul>
+          <li>Renamed to WinPostcard, and version reset to mark the Windows port as its
+          own beta line, separate from the original GNOME app's release history</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.11.1" date="2026-08-29">
       <description translate="no">
         <p>New in this release:</p>
@@ -106,7 +115,7 @@
           <li>A unified inbox that shows mail from every account in one list</li>
           <li>One-click unsubscribe from mailing lists, straight from the reader</li>
           <li>Pick which account a message is sent from in the composer</li>
-          <li>Postcard can now start on login and keep syncing in the background</li>
+          <li>WinPostcard can now start on login and keep syncing in the background</li>
           <li>Remote images and other subresources in messages are now blocked by default</li>
           <li>IMAP and SMTP connections now verify TLS certificates</li>
           <li>Only http, https and mailto links open from a message body</li>
@@ -123,7 +132,7 @@
         <p>New in this release:</p>
         <ul>
           <li>Add a Google account straight from GNOME Online Accounts — no app password
-          to generate, and Postcard never sees a password</li>
+          to generate, and WinPostcard never sees a password</li>
           <li>The folder and conversation sidebars can now be resized</li>
           <li>Sent and Drafts now show the recipient's avatar instead of your own</li>
           <li>Faster startup, sync, and search</li>
@@ -140,7 +149,7 @@
         <p>New in this release:</p>
         <ul>
           <li>Add a Google account straight from GNOME Online Accounts — no app password
-          to generate, and Postcard never sees a password</li>
+          to generate, and WinPostcard never sees a password</li>
           <li>The folder and conversation sidebars can now be resized</li>
           <li>Sent and Drafts now show the recipient's avatar instead of your own</li>
           <li>Faster startup, sync, and search</li>
@@ -171,9 +180,9 @@
           <li>Adding an account now fills in the IMAP and SMTP settings for you — most
           providers need nothing but an address and a password</li>
           <li>A modernized reading pane</li>
-          <li>Postcard is now available on the AUR, and ships aarch64 builds alongside
+          <li>WinPostcard is now available on the AUR, and ships aarch64 builds alongside
           x86_64</li>
-          <li>Postcard now releases memory while it sits in the background</li>
+          <li>WinPostcard now releases memory while it sits in the background</li>
           <li>Fix several wrong icons around the interface</li>
         </ul>
       </description>
@@ -182,7 +191,7 @@
       <description translate="no">
         <p>New in this release:</p>
         <ul>
-          <li>One-click install: Postcard now ships a .flatpakref, so adding the repository by hand is no longer needed</li>
+          <li>One-click install: WinPostcard now ships a .flatpakref, so adding the repository by hand is no longer needed</li>
         </ul>
       </description>
     </release>
@@ -200,7 +209,7 @@
       <description translate="no">
         <p>New in this release:</p>
         <ul>
-          <li>Postcard can now be your default mail client — mailto: links open the composer
+          <li>WinPostcard can now be your default mail client — mailto: links open the composer
           with the recipient, subject and body already filled in</li>
           <li>Select several conversations at once and archive, move or trash them together,
           from the list or the right-click menu</li>

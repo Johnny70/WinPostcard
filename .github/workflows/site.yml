@@ -1,9 +1,7 @@
 name: Site
 
-# Publishes the landing page on its own, so a copy fix doesn't have to wait for
-# a release. keep_files is what makes this safe: release.yml owns the branch with
-# force_orphan, and the signed ostree repo/ lives there. Wiping it would break
-# `flatpak update` for everyone already running Postcard.
+# Publishes the landing page. This is the only job that writes to the pages
+# branch, so each run replaces its content outright -- nothing else to keep_files for.
 
 on:
   push:
@@ -30,5 +28,4 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: site
           publish_branch: pages
-          keep_files: true
-          cname: postcard.gxanshu.in
+          cname: johnnyjakobsson.com

@@ -21,7 +21,7 @@ msgstr ""
 #: data/in.gxanshu.postcard.desktop.in:2
 #: data/in.gxanshu.postcard.metainfo.xml.in:7 src/ui/main-window.blp:5
 #: src/ui/main-window.blp:104
-msgid "Postcard"
+msgid "WinPostcard"
 msgstr ""
 
 #: data/in.gxanshu.postcard.desktop.in:3
@@ -71,13 +71,13 @@ msgid "Keep checking for new mail after the window is closed."
 msgstr ""
 
 #: data/in.gxanshu.postcard.gschema.xml:26
-msgid "Start Postcard at login"
+msgid "Start WinPostcard at login"
 msgstr ""
 
 #: data/in.gxanshu.postcard.gschema.xml:27
 msgid ""
-"Whether Postcard has been set to start hidden at login. The desktop portal "
-"owns the autostart entry where it has one, otherwise Postcard writes it; "
+"Whether WinPostcard has been set to start hidden at login. The desktop portal "
+"owns the autostart entry where it has one, otherwise WinPostcard writes it; "
 "this only records the result."
 msgstr ""
 
@@ -141,7 +141,7 @@ msgstr ""
 
 #: data/in.gxanshu.postcard.metainfo.xml.in:10
 msgid ""
-"Postcard is a fast, modern email client for the GNOME desktop, built with "
+"WinPostcard is a fast, modern email client for the GNOME desktop, built with "
 "GTK 4 and libadwaita. It follows the same three-pane layout as Geary — "
 "folders, conversations, and reading pane — with a clean, native feel and "
 "nothing to configure to get started beyond your account details."
@@ -390,16 +390,16 @@ msgid "Every hour"
 msgstr ""
 
 #: src/postcard/preferences_dialog.py:131
-msgid "Postcard checks for new mail after you log in."
+msgid "WinPostcard checks for new mail after you log in."
 msgstr ""
 
 #: src/postcard/preferences_dialog.py:169
 #: src/postcard/preferences_dialog.py:199
-msgid "Could not change whether Postcard starts at login."
+msgid "Could not change whether WinPostcard starts at login."
 msgstr ""
 
 #: src/postcard/tray.py:113
-msgid "Open Postcard"
+msgid "Open WinPostcard"
 msgstr ""
 
 #: src/postcard/tray.py:114
@@ -575,11 +575,11 @@ msgid "Retry"
 msgstr ""
 
 #: src/postcard/window.py:2564
-msgid "You're offline. Postcard will reconnect when your connection returns."
+msgid "You're offline. WinPostcard will reconnect when your connection returns."
 msgstr ""
 
 #: src/postcard/window.py:2598
-msgid "Postcard is running in the background"
+msgid "WinPostcard is running in the background"
 msgstr ""
 
 #: src/postcard/window.py:2599
@@ -684,7 +684,7 @@ msgid "Add Attachment"
 msgstr ""
 
 #: src/ui/main-window.blp:29
-msgid "Welcome to Postcard"
+msgid "Welcome to WinPostcard"
 msgstr ""
 
 #: src/ui/main-window.blp:30
@@ -792,7 +792,7 @@ msgid "_Keyboard Shortcuts"
 msgstr ""
 
 #: src/ui/main-window.blp:373
-msgid "_About Postcard"
+msgid "_About WinPostcard"
 msgstr ""
 
 #: src/ui/main-window.blp:380
@@ -808,7 +808,7 @@ msgid "Accounts in GNOME Settings"
 msgstr ""
 
 #: src/ui/online-accounts-dialog.blp:20
-msgid "Postcard signs in to these for you, so there is no password to enter."
+msgid "WinPostcard signs in to these for you, so there is no password to enter."
 msgstr ""
 
 #: src/ui/online-accounts-dialog.blp:25 src/ui/online-accounts-dialog.blp:41

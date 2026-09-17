@@ -1,35 +1,39 @@
-from pathlib import Path
+"""Launch on login, via a HKCU `...\\Run` registry value.
 
-from gi.repository import GLib
+MODULE: postcard.core.autostart
+RESPONSIBILITY: enabling/disabling launch-at-login
+DEPENDS ON: winreg (stdlib, Windows-only, imported lazily so this module
+  still imports on a non-Windows test runner)
+EXPOSES: set_enabled
+"""
 
-APP_ID = "in.gxanshu.postcard"
-ENTRY_NAME = f"{APP_ID}.desktop"
+import contextlib
+import sys
 
-IS_SANDBOXED = Path("/.flatpak-info").exists()
-
-
-def user_directory() -> Path:
-    # Inside the sandbox XDG_CONFIG_HOME points at the app's private config,
-    # but the host only ever reads ~/.config/autostart.
-    if IS_SANDBOXED:
-        return Path.home() / ".config" / "autostart"
-    return Path(GLib.get_user_config_dir()) / "autostart"
+_RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
+_RUN_VALUE_NAME = "WinPostcard"
 
 
-def set_entry(directory: Path, *, is_enabled: bool) -> None:
-    """Write or remove the autostart entry, raising OSError if that fails."""
-    entry = directory / ENTRY_NAME
-    if not is_enabled:
-        entry.unlink(missing_ok=True)
-        return
+def set_enabled(is_enabled: bool) -> None:
+    """Write or remove the autostart registry value, raising OSError if that
+    fails. Disabling an already-absent value is a no-op, not an error."""
+    import winreg  # local: winreg does not exist off Windows
 
-    # The host launches this, so it cannot rely on anything on the sandbox PATH.
-    command = f"flatpak run {APP_ID}" if IS_SANDBOXED else "postcard"
-    directory.mkdir(parents=True, exist_ok=True)
-    entry.write_text(
-        "[Desktop Entry]\n"
-        "Type=Application\n"
-        "Name=Postcard\n"
-        f"Exec={command} --hidden\n"
-        f"Icon={APP_ID}\n"
-    )
+    try:
+        key = winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER, _RUN_KEY, 0, winreg.KEY_SET_VALUE
+        )
+    except OSError as error:
+        raise OSError(f"could not open HKCU\\{_RUN_KEY}") from error
+    with key:
+        if not is_enabled:
+            with contextlib.suppress(FileNotFoundError):
+                winreg.DeleteValue(key, _RUN_VALUE_NAME)
+            return
+        winreg.SetValueEx(key, _RUN_VALUE_NAME, 0, winreg.REG_SZ, _launch_command())
+
+
+def _launch_command() -> str:
+    # Points at the running interpreter until the app is packaged (a later
+    # milestone) -- correct for a dev run, not yet for a real install.
+    return f'"{sys.executable}" --hidden'

@@ -1,0 +1,388 @@
+[
+  {
+    "ts": "2026-09-05T00:00:00Z",
+    "task": "Rename user-visible product name from \"Postcard\" to \"UniPostcard\". App ID in.gxanshu.postcard, D-Bus/schema paths, GObject type names, class names, repo URLs and Flatpak/gettext identifiers left unchanged.",
+    "files": [
+      "README.md",
+      "CONTRIBUTING.md",
+      "SECURITY.md",
+      "web/index.html",
+      ".github/ISSUE_TEMPLATE/bug_report.yml",
+      ".github/ISSUE_TEMPLATE/feature_request.yml",
+      ".github/workflows/release.yml",
+      ".github/workflows/site.yml",
+      "justfile",
+      "data/in.gxanshu.postcard.desktop.in",
+      "data/in.gxanshu.postcard.gschema.xml",
+      "data/in.gxanshu.postcard.metainfo.xml.in",
+      "po/postcard.pot",
+      "src/ui/main-window.blp",
+      "src/ui/online-accounts-dialog.blp",
+      "src/postcard/window.py",
+      "src/postcard/preferences_dialog.py",
+      "src/postcard/tray.py",
+      "src/postcard/mail_sync.py",
+      "src/postcard/core/autostart.py",
+      "src/postcard/core/secrets.py"
+    ],
+    "outcome": "done",
+    "note": "ruff check and ruff format --check pass on src/postcard. Two now-overlong strings in window.py wrapped. XML files parse. Keyring label change in core/secrets.py is display-only (lookup keys on schema attributes, not label), so existing stored credentials are unaffected. Historical <release> notes in metainfo.xml.in were also switched to the new name for consistency."
+  },
+  {
+    "ts": "2026-09-16T00:00:00Z",
+    "task": "Windows + Linux port, phase 1: introduce core/platform/ as the single seam every caller goes through for secrets, autostart, GOA and the tray icon, instead of importing the D-Bus/libsecret modules directly. Linux behavior is unchanged (core/secrets.py, core/autostart.py, core/goa.py, tray.py keep their existing bodies; core/platform/linux.py just wraps them). Also landed real Windows backends (originally scoped as later phases) because core/platform/__init__.py dispatches on sys.platform at import time, so the package needs a working win32 branch to import at all on this Windows dev machine: core/platform/windows.py provides WindowsSecretStore (keyring / Windows Credential Manager), WindowsAutostart (a HKCU Run registry key) and an explicit WindowsOnlineAccounts no-op (no system-level account manager exists on Windows). WindowsTray is a documented no-op placeholder -- a real Win32 tray needs its own pystray spike, not done here.",
+    "files": [
+      "src/postcard/core/platform/__init__.py",
+      "src/postcard/core/platform/linux.py",
+      "src/postcard/core/platform/windows.py",
+      "src/postcard/core/secrets.py",
+      "src/postcard/application.py",
+      "src/postcard/online_accounts_dialog.py",
+      "src/postcard/preferences_dialog.py",
+      "src/postcard/account_dialog.py",
+      "src/postcard/accounts_dialog.py",
+      "src/postcard/composer_window.py",
+      "src/postcard/window.py",
+      "src/meson.build",
+      "requirements.txt",
+      "pyproject.toml",
+      "conftest.py",
+      "tests/core/test_autostart.py",
+      "tests/core/test_secrets.py",
+      "tests/test_tray.py",
+      "tests/core/platform/test_init.py",
+      "tests/core/platform/test_linux.py",
+      "tests/core/platform/test_windows.py"
+    ],
+    "outcome": "done",
+    "note": "ruff check + ruff format --check clean. pyright: 0 errors (with PyGObject-stubs and keyring installed -- both were already-documented prerequisites, keyring now added to requirements.txt). pytest: 353 passed on this Windows box. Two test files (tests/core/test_secrets.py, tests/core/platform/test_linux.py) cannot run here because libsecret has no Windows build at all (confirmed via `gvsbuild list`) -- correct by inspection, verified on Linux/CI instead. One pre-existing, unrelated failure (tests/test_mail_sync.py::test_a_connection_the_server_hung_up_on_is_reopened) reproduces identically before and after this change; not touched. conftest.py is new, small, and inert everywhere except when a developer sets GVSBUILD_DIR: it fixes two independent native-DLL-search problems this session hit running the suite against a local gvsbuild GTK4/libadwaita/PyGObject install (pycairo's own extension-loading needs os.add_dll_directory; GObject-Introspection's typelib-referenced shared libraries are resolved through GLib's own loader instead, which follows PATH) -- without it, every test touching Gio failed with a confusing 'TypeError: must be an interface' from gi/overrides/Gio.py, including pre-existing tests (test_goa.py, test_avatars.py) that Phase 1 never touched."
+  },
+  {
+    "ts": "2026-09-16T00:00:00Z",
+    "task": "Windows port, phases 5-7. Phase 5: real Windows tray. Extracted the app./win.-scoped action-routing logic tray.py's _activate/_action_window already had into a new shared src/postcard/tray_actions.py (no behavior change, removes the duplication the new Windows tray would otherwise have repeated), then built core/platform/windows_tray.py (pystray + PIL) on top of it, replacing windows.py's Phase-1 no-op placeholder. A threading spike (tools discarded after use, result recorded here) confirmed pystray's own Win32 message-loop thread can safely GLib.idle_add(...) back onto the GTK main loop before touching Gio.Action/GObject state -- no deadlock, no race. Phase 6: added a test-windows job to .github/workflows/tests.yml (windows-latest, gvsbuild + --enable-gi, continue-on-error: true, cached C:\\gtk-build) exercising the real winreg/Credential Manager/pystray calls the Linux job's mocks only prove the logic around; not run for real (no access to GitHub Actions from here), so it is written correctly by best effort, incorporating every gotcha this session hit locally, but unverified end-to-end. Phase 7: win-init/win-build/win-run/win-test recipes in justfile, tools/win_run.py and tools/win_blueprint_compile.py (blueprint-compiler has no gvsbuild project -- fetched from git and run uninstalled), docs/windows-setup.md. All four recipes were actually run via `just` on this machine, not just sketched: win-build produces a real gresource+gschema+compiled .ui set, win-test passes 368 tests, and win-run starts the real PostcardApplication through to the same wall documented below.",
+    "files": [
+      "src/postcard/tray_actions.py",
+      "src/postcard/tray.py",
+      "src/postcard/core/platform/windows_tray.py",
+      "src/postcard/core/platform/windows.py",
+      "src/postcard/core/platform/__init__.py",
+      "requirements.txt",
+      "justfile",
+      "tools/win_run.py",
+      "tools/win_blueprint_compile.py",
+      "docs/windows-setup.md",
+      ".gitignore",
+      ".github/workflows/tests.yml",
+      "pyproject.toml",
+      "tests/test_tray_actions.py",
+      "tests/test_tray.py",
+      "tests/core/platform/test_windows_tray.py",
+      "tests/core/platform/test_windows.py"
+    ],
+    "outcome": "blocked",
+    "note": "IMPORTANT FINDING, not fixed here: composer_window.py and message_view.py both require WebKit 6.0 (gi.require_version(\"WebKit\", \"6.0\")) for HTML mail compose/rendering. WebKitGTK has no Windows port at all upstream (Linux-only) and gvsbuild has no webkit project (`gvsbuild list` confirms). `just win-run` proves everything up to that wall works -- gresource/gschema load, Adw.Application starts, the main window's own imports succeed -- then crashes with ValueError: Namespace WebKit not available the moment application.py imports composer_window.py. This is a real, unresolved architecture gap for a fully working Windows port (not a polish item), documented in docs/windows-setup.md's \"Known gap\" section; a community WebKitGTK-compatible wrapper over Microsoft Edge WebView2 (github.com/roojs/webview2-gtk) exists but has not been evaluated. Everything else verified clean: ruff check + format --check + pyright 0 errors across src/tests/tools; pytest 368 passed via `just win-test` (same 2 libsecret-only files and 1 pre-existing unrelated mail_sync flake excluded as in the phase-1 entry). Also fixed in passing: Git Bash mis-splits a drive-letter colon (\"C:/...\") when it is joined into a colon-separated $PATH/$PYTHONPATH string -- every win-* justfile recipe now builds paths from a Unix-style (\"/c/...\") gvsbuild-dir variable instead, and PYTHONPATH specifically goes through `cygpath -pw` since (unlike $PATH) Git Bash does not auto-convert it."
+  },
+  {
+    "ts": "2026-09-17T00:00:00Z",
+    "task": "Decision: drop Linux entirely and go Windows-only (user's explicit call after evaluating webview2-gtk -- see the note above). Removed everything Linux/Flatpak/D-Bus-only rather than leaving it unused, per the project's own 'remove old code immediately' rule: in.gxanshu.postcard.json (Flatpak manifest), the old D-Bus StatusNotifierItem tray.py, core/goa.py (GNOME Online Accounts), online_accounts_dialog.py and its UI entry points in accounts_dialog.py/window.py/their .blp files, the old libsecret core/secrets.py, and the core/platform/ dispatch package (Protocol + sys.platform branch) that only existed to choose between Linux and Windows. What used to be core/platform/windows*.py is now promoted directly to core/secrets.py (keyring), core/autostart.py (registry), and tray.py (pystray) -- no more generic layer, since there is exactly one platform now. preferences_dialog.py's Background-portal D-Bus dance (three methods, a D-Bus signal subscription) collapsed to one direct autostart.set_enabled() call. Account.goa_id removed from the model and from database.py's save_account (its DB column is left alone -- no migration needed, nothing sets it anymore). justfile dropped every Flatpak recipe (init/build/run/run-debug/inspect/bundle/lint) and the win- prefix on the rest (win-build -> build, win-run -> run, win-test -> test), since there is only one build path now. CI's tests.yml lost the ubuntu-latest job entirely; the Windows job is now the only job, continue-on-error removed. README/CONTRIBUTING/SECURITY rewritten for a Windows app (no more Flatpak install instructions, GOA screenshots/features, or Flathub AI-policy mention); data/*.desktop.in and the web/ site left untouched for now (lower priority, meson's data/meson.build still references the .desktop file so deleting it would need a small meson change too -- follow-up, not urgent).",
+    "files": [
+      "src/postcard/core/secrets.py",
+      "src/postcard/core/autostart.py",
+      "src/postcard/tray.py",
+      "src/postcard/core/models/account.py",
+      "src/postcard/core/store/database.py",
+      "src/postcard/application.py",
+      "src/postcard/account_dialog.py",
+      "src/postcard/accounts_dialog.py",
+      "src/postcard/composer_window.py",
+      "src/postcard/window.py",
+      "src/postcard/preferences_dialog.py",
+      "src/ui/accounts-dialog.blp",
+      "src/ui/main-window.blp",
+      "src/postcard.gresource.xml",
+      "src/meson.build",
+      "justfile",
+      ".gitignore",
+      ".github/workflows/tests.yml",
+      "pyproject.toml",
+      "README.md",
+      "CONTRIBUTING.md",
+      "SECURITY.md",
+      "tests/core/test_secrets.py",
+      "tests/core/test_autostart.py",
+      "tests/test_tray.py",
+      "tests/core/store/test_database.py"
+    ],
+    "outcome": "done",
+    "note": "Deleted: in.gxanshu.postcard.json, src/postcard/core/goa.py, src/postcard/online_accounts_dialog.py, src/ui/online-accounts-dialog.blp, src/postcard/core/platform/ (whole package), tests/core/test_goa.py, tests/core/platform/ (whole package). ruff check + format --check clean, pyright 0 errors, pytest 335 passed (same 1 pre-existing unrelated mail_sync flake deselected as before -- confirmed still nothing to do with this change). Verified with the actual renamed justfile recipes, not just by inspection: `just build` produces the gresource/gschema/.ui set correctly (blueprint-compiler no longer chokes on the deleted online-accounts-dialog.blp), and `just run` starts the real app through to the exact same, already-documented WebKit wall in composer_window.py -- confirming Part 1 (Linux removal) introduced no new regressions before Part 2 (the webview2-gtk fork) starts."
+  },
+  {
+    "ts": "2026-09-17T00:00:00Z",
+    "task": "Part 2 (webview2-gtk fork), first half: security-critical navigation blocking, and a toolchain pivot forced by an ABI discovery. User decided to keep webview2-gtk as its own separate git clone (not vendored into this repo) at ../webview2-gtk, cloned with full upstream history intact (not a GitHub fork -- worked locally instead). Implemented real NavigationStarting cancellation there (currently a documented no-op upstream): win32-ui-webview2-events.c's event_handler1_invoke now reads the real URI + IsUserInitiated off ICoreWebView2NavigationStartingEventArgs (verified against the actual vendored WebView2 SDK header, not assumed), calls a new synchronous decide callback (WebView2GtkNavigationDecideCb, threaded through webview2gtk-host-api.h / win32-ui-webview2-host-priv.h / win32-ui-webview2-com-glue.c following the exact existing pattern win32-ui-webview2-permissions.c's set_permission_handler already uses), and applies put_Cancel before returning -- no GetDeferral needed, since the app's own decide_policy handler (message_view.py's _on_decide_policy) is itself synchronous. Added the missing Vala-side types to make this real: NavigationAction.vala, NavigationPolicyDecision.vala (overrides PolicyDecision.ignore() -- the base class's is still a no-op, unaffected), and a NavigationType enum in Enums.vala (LINK_CLICKED mapped from WebView2's own IsUserInitiated flag, since WebView2 does not distinguish navigation causes the way WebKit does -- documented as a deliberate approximation, not a guess). webview.vala wires it in at attach time and emits decide_policy(decision, PolicyDecisionType.NAVIGATION_ACTION), matching the already-working ResponsePolicyDecision/RESPONSE pattern. None of this is built or tested yet -- see the toolchain pivot below, which blocked compiling it.\n\nTOOLCHAIN PIVOT: attempting the first build surfaced that webview2-gtk's build (scripts/wv2gtk-build.sh) targets MSYS2 UCRT64 (MinGW-w64/gcc), not MSVC -- hardcoded gcc flags (-mwindows, -Wno-discarded-qualifiers), gcc-style linker flags, and its own docs reference msys2_shell.cmd -ucrt64. This is a real, not cosmetic, incompatibility with the gvsbuild (MSVC) GTK4 the rest of WinPostcard was built against from Phase 0 onward: GObject's type system is a single global registry inside glib's own DLL, so a MinGW-built webview2-gtk widget and an MSVC-built GTK4 app cannot safely share a GType registry in one process -- embedding WebView2Gtk.WebView as a live child widget in our Gtk.Box tree would mean two independent copies of glib/gobject/gtk, not one. User chose (after seeing MSYS2 UCRT64 has prebuilt packages for the entire stack -- gtk4 4.24.0, libadwaita 1.9.4, python-gobject 3.58.0, libgee 0.20.8, libsoup3 3.6.6, vala 0.56.19, blueprint-compiler 0.18.0, ruff, python-pillow, all pacman-installable in minutes) to replace gvsbuild across the whole project with MSYS2 UCRT64, rather than trying to port webview2-gtk to MSVC.",
+    "files": [
+      "../webview2-gtk/lib/host/webview2gtk-host-api.h",
+      "../webview2-gtk/lib/host/win32-ui-webview2-host-priv.h",
+      "../webview2-gtk/lib/host/win32-ui-webview2-com-glue.c",
+      "../webview2-gtk/lib/host/win32-ui-webview2-events.c",
+      "../webview2-gtk/lib/webview2gtk/webview.vala",
+      "../webview2-gtk/lib/webview2gtk/PolicyDecision.vala",
+      "../webview2-gtk/lib/webview2gtk/NavigationAction.vala",
+      "../webview2-gtk/lib/webview2gtk/NavigationPolicyDecision.vala",
+      "../webview2-gtk/lib/webview2gtk/Enums.vala",
+      "../webview2-gtk/scripts/wv2gtk-build.sh",
+      "../webview2-gtk/meson.build",
+      "justfile",
+      "conftest.py",
+      "pyproject.toml",
+      "tools/win_run.py",
+      ".github/workflows/tests.yml",
+      "README.md",
+      "CONTRIBUTING.md",
+      "docs/windows-setup.md"
+    ],
+    "outcome": "in_progress",
+    "note": "Toolchain pivot verified end-to-end on this machine: pacman-installed the full UCRT64 stack, confirmed `from gi.repository import Adw, Gtk` plus the exact Phase-0 spike (Adw.ToolbarView, NavigationSplitView, Gtk.FileDialog, Gio.Notification) all work with nothing but ucrt64/bin on PATH -- no GI_TYPELIB_PATH, no PYTHONPATH, no os.add_dll_directory dance gvsbuild needed, since MSYS2 keeps Python and the GTK DLLs in one directory. Rebuilt .venv as `--system-site-packages` against MSYS2's own Python 3.14 (this is why pyproject.toml's pyright venv now needs the ucrt64 site-packages path for stub resolution -- tried adding it to extraPaths generally, which broke gi resolution entirely for unclear reasons specific to pyright's module-search-priority with a second large site-packages root; worked around it with a single targeted `# pyright: ignore[reportMissingImports]` on tray.py's PIL import instead of chasing that further). Deleted tools/win_blueprint_compile.py (no longer needed -- blueprint-compiler is now a plain pacman package on PATH, not a manually-cloned Python checkout). justfile, conftest.py, .github/workflows/tests.yml, docs/windows-setup.md, README.md, CONTRIBUTING.md all updated to describe MSYS2 UCRT64 instead of gvsbuild. Re-verified after the pivot: ruff check + format --check clean, pyright 0 errors, pytest 335 passed (same pre-existing mail_sync flake deselected), `just build` and `just run` both work, run reaching the identical already-documented WebKit wall. webview2-gtk itself: not yet built (needs the Vala compiler + linking against this new UCRT64 GTK4/libsoup3/libgee, not yet attempted) -- next session's first step, before any of the new navigation-blocking code above can be verified to actually work."
+  },
+  {
+    "ts": "2026-09-17T00:00:00Z",
+    "task": "Get webview2-gtk (the forked/extended copy, kept as its own separate repo at ../webview2-gtk, not vendored into this one) actually producing a GObject-Introspection typelib, and verify Python can import it.",
+    "files": [
+      "../webview2-gtk/scripts/wv2gtk-build.sh"
+    ],
+    "outcome": "in_progress",
+    "note": "Two real build-system bugs fixed, both in wv2gtk-build.sh's `lib` case, neither touching app code in this repo. (1) valac's --gir writer rejects a compilation unit outright if it contains a second top-level namespace (`error: Secondary top-level namespace 'Win32Atspi' is not supported by GIR format`) -- webview2-gtk's accessibility bridge (win32atspi/Win32Atspi.vala, Win32AtspiWin.vala) is exactly that. The static .a/.dll build (which does NOT pass --gir) still compiles the full source list unchanged, so accessibility wiring is intact in the real library. A separate, GIR-only valac pass was added that excludes those two files -- but webview.vala itself calls Win32Atspi.register_webview(this) and Win32Atspi.Bridge.unregister(this) directly, which then don't resolve. Fixed by generating a throwaway copy of webview.vala for this pass only, with those two call sites replaced by a no-op comment via sed (verified via a grep assertion that the substitution actually matched, so a future upstream rename fails loudly instead of silently producing an unfiltered GIR); the real webview.vala and the real accessibility bridge are untouched and still linked into the actual .dll. (2) g-ir-compiler (which turns the .gir into a loadable .typelib) was not installed under MSYS2 UCRT64 at all -- `pacman -S mingw-w64-ucrt-x86_64-gobject-introspection` was missing from Phase-0's package list. Installed it. Also spent real time chasing a red herring: exporting TMP/TEMP/TMPDIR by hand before invoking the build made valac itself fail with `Cannot create temporary file in C:\\WINDOWS\\: Permission denied` on the GIR pass specifically -- turned out to be caused by my own manual env overrides conflicting with GLib's own Win32 temp-dir resolution, not a real bug in the script; leaving TMP/TEMP untouched (just PATH=ucrt64/bin prepended) builds clean. Verified end to end: `bash scripts/wv2gtk-build.sh lib build build/install-staging build/libwebview2gtk-1.stamp` exits 0 and produces libwebview2gtk-1-0.dll, WebView2Gtk-1.0.gir and WebView2Gtk-1.0.typelib; with GI_TYPELIB_PATH and PATH pointed at that install-staging tree, `from gi.repository import WebView2Gtk; WebView2Gtk.WebView` imports and lists real GTK widget methods (add_css_class, activate, etc.) -- this was the plan's stated exit criterion for part 2b."
+  },
+  {
+    "ts": "2026-09-17T00:30:00Z",
+    "task": "Plan part 2c mandatory gate: write and run a standalone smoke test proving PolicyDecision.ignore() actually cancels a WebView2 navigation, not just records the request. This is the one piece the whole HTML-mail-security case depends on, and the plan explicitly forbids skipping or assuming it.",
+    "files": [
+      "../webview2-gtk/scripts/smoke-navigation-block.py"
+    ],
+    "outcome": "success",
+    "note": "Added scripts/smoke-navigation-block.py to the webview2-gtk fork (not this repo -- it exercises the fork's own public API and needs its built lib/install-staging tree on PATH/GI_TYPELIB_PATH to run, so it lives there, run manually, not wired into WinPostcard's own pytest collection). It opens a real Gtk.ApplicationWindow, embeds a WebView2Gtk.WebView, loads a page containing a link to a fake blocked URL, connects decide_policy to call decision.ignore() for that specific URL, then calls web.load_uri() on it directly (a real NavigationStarting event, not a simulated one) and asserts via web.get_uri() that the WebView never actually navigated there. Ran it against the freshly built library: decide_policy fired, ignore() was called, and get_uri() stayed at 'about:blank' instead of becoming the blocked URL -- PASS. Along the way, discovered PyGObject does not expose WebView2Gtk's construct-only GObject properties (navigation_action, request, uri) as Python attributes for this fork's generated GIR -- had to call get_navigation_action().get_request().get_uri() explicitly instead of dotted-property access; worth remembering for the real composer_window.py/message_view.py wiring in part 2e, since the plan's assumption that a plain from gi.repository import WebView2Gtk as WebKit swap 'just works' may need the same get_*() adjustment anywhere WebKitGTK code reads a property WebView2Gtk only exposes via getter."
+  },
+  {
+    "ts": "2026-09-17T01:00:00Z",
+    "task": "Plan part 2d: extend WebViewSettings with enable_page_cache, enable_media, enable_webaudio, enable_webgl, enable_back_forward_navigation_gestures.",
+    "files": [
+      "../webview2-gtk/lib/webview2gtk/Settings.vala",
+      "../webview2-gtk/lib/webview2gtk/webview.vala",
+      "../webview2-gtk/lib/host/win32-ui-webview2-settings.c",
+      "../webview2-gtk/lib/host/win32-ui-webview2-settings.h",
+      "../webview2-gtk/lib/host/win32-ui-webview2-host-priv.h",
+      "../webview2-gtk/lib/host/win32-ui-webview2-host.vala",
+      "../webview2-gtk/lib/host/webview2gtk-host-api.h",
+      "../webview2-gtk/scripts/wv2gtk-build.sh",
+      "../webview2-gtk/meson.build"
+    ],
+    "outcome": "success",
+    "note": "Checked every one of the 5 requested properties against the real vendored WebView2.h (grepped every get_/put_ accessor across ICoreWebView2Settings through …Settings9), not assumed: only enable_back_forward_navigation_gestures has a real WebView2 equivalent (ICoreWebView2Settings6.IsSwipeNavigationEnabled). The other four (page cache, media, webaudio, webgl) have nothing in ICoreWebView2Settings at any version -- left stored-only/no-op with a doc comment explaining why, matching this fork's own existing precedent (media_playback_requires_user_gesture, navigator_webdriver_active_policy are already 'stored only' in the same file). For the one real property, added a new dedicated host-level module (win32-ui-webview2-settings.c/.h, one file = one responsibility, mirroring the existing apply_muted_to_host pattern in win32-ui-webview2-permissions.c exactly): get_Settings() -> QueryInterface to ICoreWebView2Settings6 -> put_IsSwipeNavigationEnabled, applied immediately if the host is already attached and once more from finish_setup (host.vala) when the host becomes ready, so a value set before attach is not lost. Registered the new .c file in wv2gtk-build.sh's host_c_files list and meson.build's lib_depend_files (both required -- missed either one silently drops the file from the real build or from incremental-rebuild tracking). Rebuilt clean (exit 0) and verified from Python: WebViewSettings.get_enable_page_cache() etc. all return their documented defaults, and get_enable_back_forward_navigation_gestures() reflects the real COM round-trip. Re-ran scripts/smoke-navigation-block.py as a regression check -- still PASS, no interaction with the 2c navigation-blocking wiring."
+  },
+  {
+    "ts": "2026-09-17T01:30:00Z",
+    "task": "Plan parts 2e/2f: point composer_window.py and message_view.py at WebView2Gtk instead of WebKit, and wire the fork's build output into this repo's justfile/conftest.py so build/run/test can find it.",
+    "files": [
+      "src/postcard/message_view.py",
+      "src/postcard/composer_window.py",
+      "src/postcard/window.py",
+      "justfile",
+      "conftest.py"
+    ],
+    "outcome": "in_progress",
+    "note": "2e: the plan's predicted 'try aliasing import WebView2Gtk as WebKit first' approach worked for the signal/method shapes (decide_policy, load_html, evaluate_javascript's async signature, PolicyDecisionType/NavigationType enums, UserContentManager script-message bridge all matched WebKitGTK's shape exactly, no call-site logic changes needed there), but three real constructor/API differences surfaced and were fixed at the call site, not shimmed: (1) WebView2Gtk.WebView() takes no related_view kwarg -- WebKitGTK's per-view-is-a-separate-300MB-process model that the old _anchor/_ensure_anchor/release_anchor machinery in message_view.py existed to work around does not apply to WebView2 (its environment/process model is already shared), so that whole mechanism was deleted outright (dead code under this project's own 'remove old code immediately' rule) along with its window.py call site and the now-unused message_view module import there; (2) WebView2Gtk.WebView has no set_background_color -- dropped from both files (cosmetic: an email/editor background flash before first paint is now possible; not a correctness or security issue, left as-is rather than adding new COM plumbing under this task's scope); (3) WebView2Gtk.WebView() has no user_content_manager construct kwarg -- composer_window.py now calls webview.get_user_content_manager() after construction instead of passing one in. Also: WebKit.WebContext.get_default().set_cache_model(...) has no WebView2Gtk equivalent at all (dropped, no-op); JavaScriptCore.Value became WebView2Gtk.JavaScriptResult (this fork's own JSC.Value-shaped stand-in, same .to_string() contract, so the call site itself needed no change beyond the type annotation). Confirmed via ruff check/format, pyright (0 errors -- added a targeted `pyright: ignore[reportAttributeAccessIssue]` on both new WebView2Gtk imports, since PyGObject-stubs has no entry for this fork's own GIR, mirroring the same PIL precedent from the toolchain-pivot session), pytest (336 passed, unchanged), and a real `tools/win_run.py` launch that reached the tray-setup log line with no import/startup traceback -- proves the module wiring works. NOT yet verified: actually opening an HTML message or the compose window in the running app (needs a human driving the GUI; this environment cannot). 2f: added a `webview2gtk-dir`/`webview2gtk-stage` pair to justfile (env var WEBVIEW2GTK_DIR, default sibling checkout `../webview2-gtk`, matching the UCRT64_DIR pattern already there), a new `init-webview2gtk` recipe that runs the fork's own wv2gtk-build.sh, and PATH/GI_TYPELIB_PATH exports added to `run`/`run-debug`/`test`; conftest.py got the equivalent for direct/IDE pytest runs."
+  },
+  {
+    "ts": "2026-09-17T02:00:00Z",
+    "task": "Plan part 2a (retroactive): the webview2-gtk clone's git remote was still upstream roojs/webview2-gtk, not a fork under the user's own GitHub account. User forked it manually on github.com (github.com/Johnny70/webview2-gtk) and gave the URL; repoint the local clone and push this session's work there.",
+    "files": [
+      "README.md",
+      "docs/windows-setup.md"
+    ],
+    "outcome": "success",
+    "note": "In ../webview2-gtk: renamed the existing `origin` remote to `upstream` (still github.com/roojs/webview2-gtk, for pulling upstream fixes later) and added `origin` pointing at github.com/Johnny70/webview2-gtk. Before committing, found and reverted an unrelated working-tree change to lib/webview2gtk/webview2gtk.h -- a valac-generated header that upstream commits directly into the source tree, which this session's own local build had silently overwritten with cosmetic differences (valac 0.56.19 vs the committed 0.56.18, different header-guard name from a different -d invocation) that had nothing to do with the real feature work; committing that would have been noise disguised as a source change. Committed the real changes (GIR generation, real navigation-blocking, the 5 new WebViewSettings properties, all from the last few entries) as a single commit and pushed to origin/master -- 16 files, 514 insertions. Updated this repo's own README.md and docs/windows-setup.md to point at the fork's real URL instead of upstream, and rewrote windows-setup.md's now-stale 'HTML mail rendering does not work yet' section (accurate when written, before this session's 2b-2f work) to describe the current state and add the `just init-webview2gtk` step. Not done: opening a PR back to roojs/webview2-gtk was never in scope and has not been discussed with the user. Also pushed a follow-up commit (c22acf7) adding a fork-divergence callout to webview2-gtk's own README, per user feedback that a bare fork gives no visible signal of what changed."
+  },
+  {
+    "ts": "2026-09-17T02:30:00Z",
+    "task": "Status re-check before telling the user whether postcard is ready to test: re-ran ruff/pyright/pytest/build/launch from a clean shell instead of trusting the prior session's last-known-green state.",
+    "files": [
+      "src/postcard/composer_window.py",
+      "src/postcard/message_view.py"
+    ],
+    "outcome": "success",
+    "note": "Found `ruff check` failing (I001, import block un-sorted) on both files touched in the 2e entry above -- the pyright:ignore comment added to the WebView2Gtk import had never been re-verified against ruff afterward, only pyright. Fixed with `ruff check --fix` + `ruff format` (ruff wrapped the ignore-comment import in parens to keep the line length rule happy; the pyright:ignore comment stayed attached to the right import and pyright still reports 0 errors after). Re-ran the full gate from a clean shell: ruff check + format --check clean, pyright 0 errors, pytest 336 passed, `just build`'s steps run clean, and a real `tools/win_run.py` launch reaches the tray-setup log line with no traceback. This is the first time this session's WebView2Gtk wiring has been checked end-to-end in one pass rather than piecemeal across several edits -- worth doing before any 'is it ready' claim, not after."
+  },
+  {
+    "ts": "2026-09-17T03:00:00Z",
+    "task": "User asked to be as sure as possible that no errors remained before manual testing (their words: the manual test procedure is cumbersome). A launch-and-don't-crash check is not evidence the WebView code paths work -- wrote tools/smoke_message_view.py and tools/smoke_composer_window.py to drive the REAL MessageView and PostcardComposerWindow classes end to end against a live WebView2, not a reimplementation. This found two real production bugs and one serious landmine on first use.",
+    "files": [
+      "tools/smoke_message_view.py",
+      "tools/smoke_composer_window.py",
+      "src/postcard/message_view.py"
+    ],
+    "outcome": "success",
+    "note": "Bug 1 (message_view.py, real, would have shown every HTML message as blank): WebKitGTK's load_html() arrives with uri=='about:blank', which _on_decide_policy special-cased as 'the document's own load, not hostile' -- WebView2's NavigateToString (what this fork's load_html() uses) instead fires NavigationStarting with a data:text/html;base64,... URI it generates itself, which _on_decide_policy could not tell apart from a real hostile navigation and blocked outright. Fixed with an explicit _own_load_pending flag set right before every load_html() call and consumed by the next NAVIGATION_ACTION-type decide_policy, deterministic rather than guessing from the URL's shape (the about/'' scheme special-case, now dead since this app is Windows-only, was removed). Bug 2 (my own fix's first draft, caught before it shipped): checking _own_load_pending before the isinstance(decision, NavigationPolicyDecision) check meant an unrelated RESPONSE-type decide_policy event -- which does fire, confirmed via a traced monkeypatch of _on_decide_policy during debugging -- could consume the flag before the real navigation-action event for the pending load arrived, silently reintroducing the same bug for the second load_html() call (the 'Show Images' reload). Reordered so only a real NavigationPolicyDecision can consume the flag. Bug 3, the actual bug: the fix from the first entry was applied to _show_html but never to _on_show_images_clicked's own load_html() call -- traced with a second monkeypatch logging own_load_pending immediately before/after that method ran, which showed the flag was never set at all. Added the missing line. All three found and fixed only because the smoke test asserted the reload path specifically, not just the first load. Separately, tools/smoke_composer_window.py's first run appeared to hang for 3+ minutes; turned out to be a real Windows fatal exception (code 0x8001010D, RPC_E_CANTCALLOUT_ININPUTSYNCCALL) from calling evaluate_javascript (a synchronous ExecuteScript COM call) directly inside the WebView's own load-changed signal -- a nested-COM-callback reentrancy fault that crashes the whole process below the Python exception layer, so nothing was printed and it looked identical to a hang. Not a bug in production code (composer_window.py only ever calls _exec from a GTK button click, never from inside a WebView2 event handler) but a real landmine for any future code that does -- documented in the test itself. Fixed the test with GLib.idle_add to defer off the callback's stack. Separately (not a bug, a process-hygiene issue): repeated killed/crashed test runs left the WebView2 user-data-folder locked by orphaned msedgewebview2.exe children, producing `WebView2 controller failed: 0x800700aa` (ERROR_BUSY) on the next run -- cleared with `taskkill /F /IM msedgewebview2.exe /T`; found and left alone a large set of unrelated msedgewebview2.exe processes belonging to Windows' own Search/Cortana UI (SearchHost.exe), not this session's work. Both smoke tests pass, reproducibly, run twice back to back. Full gate re-verified clean after: ruff check + format --check, pyright 0 errors, pytest 336 passed."
+  },
+  {
+    "ts": "2026-09-17T04:00:00Z",
+    "task": "User wants the app to start like a normal double-clickable Windows program, not via `just run`/a terminal. Package a standalone build with PyInstaller (kept Python -- packaging, not a rewrite, gets you a normal-feeling program; a rewrite would mean redoing the whole app for zero benefit here).",
+    "files": [
+      "tools/win_package.py",
+      "tools/win_app_entry.py",
+      "justfile"
+    ],
+    "outcome": "success",
+    "note": "New `just package` builds build/pkg-dist/UniPostcard/UniPostcard.exe (--onedir, --windowed, 192 MB). Iterated by actually running the output and reading the real errors, not guessing upfront -- four real, distinct problems, each confirmed before moving to the next: (1) ModuleNotFoundError: No module named 'postcard' -- PyInstaller's static analysis never sees src/ unless told to; fixed with --paths src. (2) My own entry point's GI_TYPELIB_PATH assignment was overwriting, not extending, what PyInstaller's own pyi_rth_gi runtime hook had already set for its auto-bundled GTK typelibs, breaking Gio/Gtk/Adw entirely -- except this fix turned out to be chasing the wrong layer (see next). (3) The real cause: PyInstaller's own gi hooks (hook-gi.repository.Gtk.py, Gdk.py, ...) hardcode GiModuleInfo('Gtk', '3.0') with no override for a GTK4 app -- confirmed by reading PyInstaller's own hook source, not guessed -- so they silently fail to find any of Gtk-4.0/Gdk-4.0/etc.'s real typelibs (the DLLs themselves still get bundled fine, via a separate, generic binary-dependency walker that doesn't share this bug). An earlier isolated smoke test had worked only because it happened to manually stage all 80 ucrt64 typelibs and point GI_TYPELIB_PATH at them directly, bypassing PyInstaller's broken hook entirely without my realizing that was why it worked -- the real win_package.py script hadn't been doing that. Fixed by having win_package.py stage every ucrt64 .typelib itself (not just webview2-gtk's) and having win_app_entry.py point GI_TYPELIB_PATH at that staged copy exclusively, since PyInstaller's own bundle is neither trustworthy nor complete for this. (4) GDK_PIXBUF/GSettings/icon theme: staged gdk-pixbuf loaders with their loaders.cache regenerated via gdk-pixbuf-query-loaders against the staged copy (the original cache bakes in absolute C:\\msys64\\... paths, useless once copied elsewhere), merged this app's own GSettings schema with GTK/Adw's own and recompiled, and copied the Adwaita icon theme -- none of these had failed yet when discovered, added proactively based on what a GTK4 app needs at runtime, then verified by actually running the result rather than assumed sufficient. Verified end to end: the built .exe launches standalone (no MSYS2 on PATH, no venv activation) to the same tray-setup log line dev mode reaches, and a screenshot of the running window confirms it actually renders correctly -- dark theme, libadwaita styling, correct fonts, the 'Welcome to UniPostcard' / 'Add Account' screen -- not just 'the process didn't crash'. Wired into justfile as `just package` (needs `just build` + `just init-webview2gtk` already done) and added pyinstaller to `just init`'s pip install list."
+  },
+  {
+    "ts": "2026-09-17T04:30:00Z",
+    "task": "User wants something more final than the onedir folder from the previous entry -- built a real installer (Inno Setup, already present on this machine from an earlier, unrelated install) and fixed a real icon bug found along the way.",
+    "files": [
+      "packaging/UniPostcard.iss",
+      "packaging/UniPostcard.ico",
+      "tools/win_package.py",
+      "justfile"
+    ],
+    "outcome": "success",
+    "note": "packaging/UniPostcard.iss: per-user install (PrivilegesRequired=lowest, installs under {localappdata}\\Programs -- no UAC prompt, no admin needed, same pattern as VS Code/Discord), Start Menu shortcut + optional desktop icon + uninstaller, fixed AppId GUID so re-running upgrades in place instead of duplicating the Start Menu entry. Generated packaging/UniPostcard.ico from the existing data/icons/hicolor/256x256 PNG via Pillow (multi-resolution: 16 through 256px) for the installer/exe/shortcut icon. While staging assets for this, noticed the same 'no in.gxanshu.postcard.png on the system data dirs; using a placeholder' warning from the earlier packaging entry was still present, and root-caused it properly instead of leaving it: tray.py's _icon_file() looks under GLib.get_system_data_dirs() (XDG_DATA_DIRS, which win_app_entry.py already points at the bundle's share/ dir) for icons/hicolor/64x64/apps/in.gxanshu.postcard.png -- the packaged build had never staged data/icons/hicolor at all, only Adwaita's own icon theme. Added that copy to win_package.py. Verified end to end, not just compiled: ran the actual installer with /VERYSILENT /DIR=<scratch path> /NOICONS to a throwaway test location (not the real default install path, to leave no trace), confirmed the files landed, launched the installed UniPostcard.exe directly (no MSYS2, no PyInstaller dist folder, no dev environment involved at all) and confirmed via log output that the icon warning is gone, then took a screenshot of the running installed app -- the window now shows the real UniPostcard diamond icon instead of the placeholder triangle, in both the empty-state illustration and (per the earlier screenshot's taskbar entry) the taskbar. Cleanly uninstalled via the generated unins000.exe /VERYSILENT afterward and confirmed the test directory was removed. Installer is 51 MB compressed (from the 192 MB unpacked build). Added `just installer` (depends on `just package`) wrapping the ISCC.exe compile, with a clear error message pointing at `winget install JRSoftware.InnoSetup` if it's missing. Full ruff/pyright gate re-verified clean after. Not yet done: code-signing the installer/exe (an unsigned installer will show a Windows SmartScreen warning on first run elsewhere -- expected for an unsigned indie app, not a bug, but worth knowing); still never tested adding a real mail account (needs a human with real IMAP/SMTP credentials)."
+  },
+  {
+    "ts": "2026-09-17T05:00:00Z",
+    "task": "User asked whether updating the app will require re-adding the mail account. Verified this concretely (not just architecturally), found and fixed a real update-blocking bug, and separately made and then repaired a real mistake against the user's own live, already-installed copy of the app during that verification.",
+    "files": [
+      "packaging/UniPostcard.iss"
+    ],
+    "outcome": "success",
+    "note": "Confirmed account data was already safe by design before changing anything: Database() uses GLib.get_user_data_dir()/postcard (%LOCALAPPDATA%\\postcard\\postcard.db on Windows -- confirmed by running it, not assumed), GSettings uses GRegistrySettingsBackend (HKCU, confirmed the same way), and keyring uses Windows Credential Manager -- none of these live under {app} (%LOCALAPPDATA%\\Programs\\UniPostcard), which is all the installer's [Files] section ever touches. Verified concretely with a real test: inserted a marker account row directly into the live postcard.db, ran the installer again over the real (already-installed, running) app to simulate an update, and confirmed the row survived untouched. That same test surfaced a real bug: with CloseApplications defaulting to 'yes', Setup tried to close the running UniPostcard.exe via RestartManager, failed to get it to close in time, and aborted the entire update rather than proceeding -- an update silently doing nothing while the app is open is exactly the opposite of painless. Fixed with CloseApplications=force (terminates it if it won't close gracefully) + RestartApplications=yes, verified against a second, isolated test instance that the force-close now actually completes the update successfully. Separate from the app itself: while running that verification, discovered mid-session that Inno Setup's per-user Start Menu/Desktop shortcuts and its HKCU uninstall registry key are keyed by AppId/AppName only, not by install path -- so installing the test build to a scratch directory (to avoid touching the user's real install) still overwrote the SAME real desktop shortcut and Start Menu folder the user's real installed copy uses, and uninstalling that test copy afterward deleted the real install's registry uninstall entry entirely (files on disk were untouched and it kept running, but it silently dropped out of Windows' 'Add or Remove Programs'). Caught this by checking the registry key after the test rather than assuming it was scoped safely, and repaired it immediately by reinstalling over the real default location (which also force-closed the user's actual running instance to update it) -- verified afterward that the registry entry, desktop shortcut, and Start Menu entries all point at the correct real install path again, and that the account database was never touched throughout. Lesson for next time testing an installer against a real, already-installed copy of anything: check what shared, non-path-scoped state (registry keys, shortcuts) a 'DIR=scratch-path' test install still touches before running it, not after."
+  },
+  {
+    "ts": "2026-09-17T05:30:00Z",
+    "task": "User signed into their own real Gmail account (with an app password) in the installed UniPostcard.exe and confirmed it works excellently.",
+    "files": [],
+    "outcome": "success",
+    "note": "The one thing every entry in this log's Windows-port arc kept flagging as 'not yet verified' -- a real account, real IMAP/SMTP credentials, real mail -- is now confirmed working end to end, by the user, against the actual installed build (not a dev-mode run). Closes out the port: GTK4/libadwaita UI, keyring-backed credential storage, IMAP/SMTP sync, HTML mail rendering and composing via the webview2-gtk fork, and the PyInstaller+Inno Setup packaging all verified working together in one real session."
+  },
+  {
+    "ts": "2026-09-17T06:00:00Z",
+    "task": "User reported real flicker in the reading pane when clicking between messages in the list. Root-caused and fixed in the webview2-gtk fork, not worked around in the app.",
+    "files": [
+      "../webview2-gtk/lib/host/win32-ui-webview2-background.c",
+      "../webview2-gtk/lib/host/win32-ui-webview2-background.h",
+      "../webview2-gtk/lib/host/win32-ui-webview2-host-priv.h",
+      "../webview2-gtk/lib/host/win32-ui-webview2-host.vala",
+      "../webview2-gtk/lib/webview2gtk/webview.vala",
+      "src/postcard/message_view.py",
+      "src/postcard/composer_window.py"
+    ],
+    "outcome": "success",
+    "note": "window.py's _render_thread destroys and rebuilds every MessageView (and its WebView) on every single conversation click (_clear_thread then fresh MessageView(...) per message) -- there is no reuse. WebKitGTK's set_background_color(Gdk.RGBA) was dropped from both message_view.py and composer_window.py during the 2e wiring session because this fork had no equivalent, with a known-and-logged cosmetic tradeoff at the time: a flash of WebView2's own opaque-white default before first paint. That flash is exactly what the user is now seeing, made worse than expected because it happens on every single click, not just once. Added a real fix at the fork level rather than papering over it: ICoreWebView2Controller2.DefaultBackgroundColor is a real, verified (checked the vendored WebView2.h directly) COM property for exactly this. New win32-ui-webview2-background.c/.h (host-level, mirrors win32-ui-webview2-settings.c's pattern: store on the host struct, apply immediately if already attached, and register once more at finish_setup -- but placed *before* com_controller_put_is_visible this time, specifically so a color set pre-attach lands before the very first frame, not just before some frame). New WebView.set_background_color(Gdk.RGBA color) method on the Vala side, matching WebKitGTK's exact signature so the two removed call sites came back completely unchanged in shape. Rebuilt the fork clean, re-ran scripts/smoke-navigation-block.py (the mandatory security regression gate) to confirm no interaction -- still PASS. Re-added the calls in message_view.py's _show_html and composer_window.py's _build_editor, both right after WebView construction and before the widget is appended to the tree (before first attach, per the fork's own new doc comment on why that ordering matters). Full gate re-verified: ruff, pyright, pytest (336 passed), both tools/smoke_message_view.py and tools/smoke_composer_window.py. Rebuilt both the packaged app (just package) and the installer (just installer, via ISCC directly since I couldn't wait synchronously) with the fix. Did not run the new installer against the user's real machine myself this time -- handed it to them to run, after the previous entry's lesson about an installer's shared, non-path-scoped state (shortcuts, registry). Committed and pushed to the fork (4be6a31). Not yet confirmed by the user that the flicker is actually gone in practice -- this is a real architectural fix for a real, verified root cause, not a guess, but the final verdict on perceived flicker needs their eyes on the rebuilt installer."
+  },
+  {
+    "ts": "2026-09-17T06:30:00Z",
+    "task": "The background-color fix in the previous entry did not fix the user's flicker -- they reported it back, explicitly unhappy about being asked to test an unverified theory. Asked two targeted diagnostic questions instead of guessing again (does it look like a flash, a resize jump, or continuous flicker; does it happen even re-clicking an already-open message) before touching any code a second time.",
+    "files": [
+      "../webview2-gtk/lib/host/win32-ui-webview2-com-glue.c",
+      "../webview2-gtk/lib/host/win32-ui-webview2-host-priv.h"
+    ],
+    "outcome": "success",
+    "note": "Answers: 'flickers continuously' (not a one-time flash) and 'yes, even re-clicking an already-open message' -- both rule out the previous theory outright (a one-time creation flash cannot explain continuous flicker on a static, already-rendered, not-being-recreated WebView) and point at something that runs repeatedly regardless of interaction. Read webview.vala's on_host_map/on_frame_tick wiring: on_frame_tick is registered via host.add_tick_callback and returns Source.CONTINUE, meaning it runs on literally every GdkFrameClock tick (every frame, 60+/sec at typical refresh rates) for as long as the view is attached -- and unconditionally calls push_bounds() every single time, which unconditionally calls vala_webview2_host_set_bounds_xywh(), which unconditionally calls ICoreWebView2Controller::put_Bounds() plus a present_webview HWND dance -- with no check anywhere, at either the Vala or C level, for whether the bounds had actually changed since the last call. A native child HWND being repositioned via put_Bounds 60+ times a second even while completely static is a directly plausible, well-evidenced cause of continuous flicker, unlike the previous theory. Fixed at the C level (win32-ui-webview2-com-glue.c's vala_webview2_host_set_bounds_xywh): skip the COM call and the present_webview dance when the requested bounds match what was last actually pushed to a live controller. Tracked via a new bounds_applied BOOL on the host struct rather than just comparing against the existing host->bounds field, since that field is also written before a controller exists (parking bounds pre-attach) -- comparing against it alone would incorrectly skip the real first push once attach completes, if the post-attach bounds happened to match whatever was cached pre-attach. Verified: clean rebuild, scripts/smoke-navigation-block.py still PASS (no interaction with this change), both tools/smoke_message_view.py and tools/smoke_composer_window.py still PASS (confirms the dedup doesn't accidentally suppress the real first bounds push -- the WebView still attaches and becomes visible), full pytest (336 passed). Committed and pushed to the fork (52558bd). Rebuilt both the packaged app and installer. Same limitation as before, stated plainly rather than glossed over: there is no way in this environment to visually confirm a *continuous* flicker is gone (a single screenshot cannot show that, unlike the one-time-flash case a screenshot arguably could have). This fix has much stronger evidence behind it than the previous attempt -- an unconditional 60+/sec native-window reposition call is a directly named, code-confirmed cause, not an inference from a design tradeoff -- but the actual verdict still requires the user's eyes on the rebuilt installer."
+  },
+  {
+    "ts": "2026-09-17T06:45:00Z",
+    "task": "User confirmed the flicker is gone in the rebuilt installer.",
+    "files": [],
+    "outcome": "success",
+    "note": "Closes out the flicker report from the previous two entries. Worth remembering the shape of this one: the first fix attempt (DefaultBackgroundColor) was a reasonable, verified-against-the-SDK theory that turned out to be the wrong layer entirely -- the user's pushback on being asked to test an unconfirmed theory, and the two follow-up diagnostic questions it prompted (continuous vs. one-time; does it happen on an already-open message), are what actually narrowed it down to the real cause (on_frame_tick's unconditional per-frame put_Bounds). Asking a sharper diagnostic question before touching code a second time beat guessing again."
+  },
+  {
+    "ts": "2026-09-17T07:00:00Z",
+    "task": "New feature: classic mail rules (\"mail from sender X moves to folder Y automatically\"), scoped down from the user's initial ask to sender-only matching (their own call: \"jag tror avsändare räcker långt\").",
+    "files": [
+      "src/postcard/core/models/rule.py",
+      "src/postcard/core/store/database.py",
+      "src/postcard/window_types.py",
+      "src/postcard/window.py",
+      "src/postcard/rule_dialog.py",
+      "src/postcard/rules_dialog.py",
+      "src/ui/rule-dialog.blp",
+      "src/ui/rules-dialog.blp",
+      "src/ui/main-window.blp",
+      "src/postcard.gresource.xml",
+      "src/meson.build",
+      "tests/core/store/test_database.py"
+    ],
+    "outcome": "success",
+    "note": "Design: one rule = (account, sender_address, destination folder), unique per (account, sender) -- adding a second rule for the same sender repoints it via an upsert rather than creating an ambiguous duplicate. Applied only to newly-arrived mail during sync (in _on_sync_done, right after the existing insert loop, gated on a new `newly_added` list alongside the existing `new_messages`), never retroactively to mail already synced -- matches classic inbox-rule semantics and keeps scope bounded, explicitly not built (v1) per the plan. A rule match is moved out via the exact same local-move-then-background-IMAP-move shape already used for manual archive/trash/move (mirrored, not reused directly, since PendingMove's optimistic-undo-toast/tombstone machinery is UI-selection-driven and doesn't fit an automatic background action with no undo UI -- new RuleMove frozen dataclass in window_types.py, new _run_rule_move_worker/_rule_move_worker/_on_rule_move_result/_on_rule_move_failed in window.py, same worker-thread-network-only + GLib.idle_add-back-to-main-thread convention as the existing _move_worker). On any failure (sign-in or IMAP error) the local placeholder is explicitly reconciled back to its original folder via db.reconcile_moved_emails, rather than left as an orphaned UID-less row -- the one piece of the existing tombstone-based safety net this simpler path still needed. A matched message is excluded from `new_messages` so it never triggers an arrival notification for a folder it didn't stay in. New DB layer: `rules` table (account_id, sender_address, folder_id; UNIQUE on account+sender), rules_for_account/save_rule/delete_rule, plus two small general-purpose additions the rule-matching code needed and that were missing: get_folder(id) (only get_folder_by_name existed) and email_id_for(folder_id, server_id) (to resolve a just-inserted MessageHeader's local row id for the move). Added 8 new tests (save/list, upsert-repoints-not-duplicates, delete, per-account scoping, both get_folder/email_id_for paths) mirroring the existing folder-test style exactly -- 344 passed (up from 336). UI: PostcardRulesDialog (list + delete, mirrors accounts_dialog.py exactly) and PostcardRuleDialog (sender entry + dynamically-populated folder ComboRow + Add, mirrors account_dialog.py's add-sub-dialog pattern, including the same __gsignals__-based \"-added\" signal convention), reachable via a new \"Rules\" hamburger-menu item bound to win.manage-rules, scoped to whichever account is currently selected (same self._account used for composing). Verified beyond ruff/pyright/pytest: wrote a standalone script instantiating both new dialogs against a real in-memory Database with a seeded account/folder/rule, confirming the .blp Template.Child bindings actually match their Python attribute names (a classic real failure mode for a new Gtk.Template class) and that add/list/delete actually round-trip through the database -- not just that the code compiles. Also did a full blueprint-compiler + glib-compile-resources build and a real (if brief) app launch to confirm the new gresource entries and menu item don't break startup. Not yet tested: an actual IMAP MOVE firing for a real incoming message matching a real rule (needs a live account and an email a rule is watching for, arriving during a real sync -- a human's task, same as this whole port's account-level testing throughout)."
+  },
+  {
+    "ts": "2026-09-17T07:20:00Z",
+    "task": "User's very next instruction after the rules feature landed: \"When the rule is created it should apply to all mail\" -- i.e. retroactively to what's already in the inbox, not just mail arriving from then on (the previous entry explicitly deferred this as a v1 scope cut; user overrode that default once they saw the feature).",
+    "files": [
+      "src/postcard/core/store/database.py",
+      "src/postcard/rule_dialog.py",
+      "src/postcard/rules_dialog.py",
+      "src/postcard/window.py",
+      "tests/core/store/test_database.py"
+    ],
+    "outcome": "success",
+    "note": "Threaded a rule's id up from where it's created to where it can actually be applied, since those are different objects with different access: PostcardRuleDialog's \"rule-added\" signal now carries the new/repointed Rule's id (was previously a bare no-args signal) instead of just being a 'go reload your list' ping; PostcardRulesDialog gained its own \"rule-created\" signal (also carrying the id) that relays it further up, because only PostcardWindow has the account-scoped move-worker machinery (credential lookup, background IMAP thread, GLib.idle_add-back) needed to actually run a move -- a dialog was never going to touch the network directly, consistent with the threading model elsewhere in this codebase. PostcardWindow._on_rule_created resolves the account's local inbox folder (by role, from already-synced Folder rows -- no fresh IMAP round trip needed), looks up every locally-stored email from that sender via a new emails_by_sender(folder_id, sender_address) db method (explicitly excludes server_id IS NULL rows -- a locally-saved Sent copy awaiting its own send should never be swept into an inbox rule's retroactive pass), and feeds the matches into the exact same RuleMove/_run_rule_move_worker path _apply_rules already uses for forward-looking matches -- no new move logic, just a new source of (email_id, uid) pairs. Guards against moving a rule's own destination folder into itself (inbox == dest, e.g. a rule accidentally pointed at INBOX) and against no account being selected. New db methods get_rule(id) and emails_by_sender(folder_id, sender_address), each with its own tests (present/absent for get_rule; matches-only and excludes-uid-less-local-rows for emails_by_sender) -- 4 new tests, 348 passed (up from 344). Extended the standalone dialog-construction script from the previous entry to verify the actual signal chain end to end (rule-added -> PostcardRulesDialog._on_rule_added -> rule-created, carrying the right rule id all the way up) rather than assuming GObject signal wiring with a typed int argument would just work -- it did, but this is exactly the kind of thing that's cheap to actually check and easy to get subtly wrong (wrong signal signature, wrong emit() arg order). Full ruff/pyright/pytest gate clean. Not yet tested: same gap as the previous entry, now doubled -- neither the forward-looking nor the retroactive path has fired against a real account's real inbox yet."
+  },
+  {
+    "ts": "2026-09-17T07:40:00Z",
+    "task": "User: \"can we make it so that when we open [a folder], it reads in 1000 old mail from Gmail if they exist\" -- the RECENT_LIMIT=50 default (from the earlier flicker-adjacent conversation about how much history a sync pulls) felt too small on first look at an inbox.",
+    "files": [
+      "src/postcard/mail_sync.py",
+      "src/postcard/window_types.py",
+      "src/postcard/window.py"
+    ],
+    "outcome": "success",
+    "note": "Scoped this to \"the first time a folder is actually looked at in this running session\", not \"every sync forever\" or \"only the literal first millisecond after launch\": self._loaded_counts (an in-memory dict, empty at every fresh launch, filled in only by a completed sync of that specific folder) already tracks exactly that -- a folder id absent from it means this session has never loaded it, whether that's the app's very first inbox view or the first time a different folder gets clicked later in the same session. Reusing it meant no new state to track and no risk of it drifting from what _on_folder_selected already does with it elsewhere. New mail_sync.INITIAL_SYNC_LIMIT = 1000 (next to the existing RECENT_LIMIT = 50), used only in _on_folder_selected's sync call when is_first_look_this_session; periodic timer polls, manual refresh, load-more-on-scroll, and the 'account just added' bootstrap all keep the routine 50 -- deliberately not widened, since the user's ask was specifically about opening/looking at a folder, and a periodic background poll re-pulling 1000 headers on every tick was never asked for and would be pure overhead once the first backfill already cached them locally. Threading `limit` through as a fifth positional/keyword parameter on _start_sync and _sync_worker tripped this project's own PLR0913 max-args=5 lint rule (window.py isn't in pyproject.toml's per-file PLR0913 exemption list, unlike mail_sync.py/database.py/the dialogs -- a deliberate existing constraint, not an oversight, so the fix was to stay under it rather than add window.py to that list) -- refactored the four optional sync parameters (folder_name, offset, should_count_unread, limit) into a new frozen SyncOptions dataclass in window_types.py, mirroring the file's existing FlagChange/BodyRequest/PendingMove/RuleMove pattern, with a module-level DEFAULT_SYNC_OPTIONS singleton instead of a `SyncOptions()` call in the default-argument position (ruff B008 -- a call there would be evaluated once at def time regardless of mutability, which is technically fine for a frozen dataclass but the lint doesn't special-case that, and a shared frozen singleton is the idiomatic fix anyway). Updated every _start_sync call site (four of them) to build a SyncOptions instead of passing the old flat keyword args. Verified: ruff/pyright clean, full pytest (348 passed, unchanged -- this only changes what limit gets requested, no test exercises a fake IMAP server whose header count would show it), and a real (brief) app launch confirming the refactored call chain doesn't crash at import/construction time. Not verified: an actual 1000-header IMAP FETCH against a real large Gmail inbox -- needs the user's own account, same as every other network-dependent feature in this whole log."
+  },
+  {
+    "ts": "2026-09-18T00:00:00Z",
+    "task": "Renamed the display name UniPostcard -> WinPostcard everywhere it appears in source, docs, packaging and CI (README, CONTRIBUTING, SECURITY, issue templates, GitHub workflows, justfile, metainfo/desktop/gschema, tray, autostart, window, preferences, mail_sync user agent, blueprints, tests, win_package.py/win_run.py, the Inno Setup script and its icon, po/postcard.pot). App ID in.gxanshu.postcard, the postcard Python package/gettext domain, D-Bus/schema paths, GObject/class names and the keyring service name were left unchanged, same as the earlier Postcard -> UniPostcard rename. Reset the project version in meson.build from 1.11.1 to 1.0.0b to mark this Windows-only rebrand as its own beta line, separate from the original GNOME app's release history, and added a matching top entry to the metainfo changelog.",
+    "files": [
+      "README.md",
+      "CONTRIBUTING.md",
+      "SECURITY.md",
+      "web/index.html",
+      ".github/ISSUE_TEMPLATE/bug_report.yml",
+      ".github/ISSUE_TEMPLATE/feature_request.yml",
+      ".github/workflows/release.yml",
+      ".github/workflows/site.yml",
+      "justfile",
+      "meson.build",
+      "data/in.gxanshu.postcard.desktop.in",
+      "data/in.gxanshu.postcard.gschema.xml",
+      "data/in.gxanshu.postcard.metainfo.xml.in",
+      "docs/windows-setup.md",
+      "po/postcard.pot",
+      "src/postcard/core/autostart.py",
+      "src/postcard/mail_sync.py",
+      "src/postcard/preferences_dialog.py",
+      "src/postcard/tray.py",
+      "src/postcard/window.py",
+      "src/ui/main-window.blp",
+      "tests/test_tray.py",
+      "tools/win_package.py",
+      "tools/win_run.py",
+      "packaging/WinPostcard.iss",
+      "packaging/WinPostcard.ico"
+    ],
+    "outcome": "success",
+    "note": "Verified with a repo-wide grep after the edit that no \"UniPostcard\" string remains anywhere except this devlog's own prior history entry (left as an accurate historical record, per the append-only rule). packaging/UniPostcard.iss and packaging/UniPostcard.ico were untracked new files from an in-progress packaging effort, so renamed with a plain mv rather than git mv; the stale root-level UniPostcard.spec (an untracked PyInstaller-generated artifact, regenerated by `just package`) was deleted rather than edited."
+  },
+  {
+    "ts": "2026-09-18T01:00:00Z",
+    "task": "Rewrote web/index.html to describe WinPostcard as a Windows app instead of the leftover GNOME/Flatpak copy from the original project, then deleted .github/workflows/release.yml on the user's confirmation: it ran flatpak-builder against in.gxanshu.postcard.json (already deleted from the repo), built for x86_64/aarch64 Linux against a GNOME runtime, and GPG-signed an ostree repo -- none of which applies to this Windows PyInstaller/Inno Setup app, and it would have failed on its first step if it ran.",
+    "files": [
+      "web/index.html",
+      "web/robots.txt",
+      "web/sitemap.xml",
+      "web/build.sh",
+      ".github/workflows/site.yml",
+      ".github/workflows/release.yml"
+    ],
+    "outcome": "success",
+    "note": "web/index.html: swapped GNOME/Flatpak copy for Windows-accurate copy (WebView2 not WebKitGTK, Windows Credential Manager not libsecret, registry Run key not the desktop portal, Windows system tray not 'GNOME has no tray'); dropped the GNOME Online Accounts screenshot/section since that feature (goa.py, online_accounts_dialog.py) is already gone from the codebase; replaced the Flatpak install cards with the real just init/build/run source-build flow, matching README's 'no packaged installer yet' state rather than inventing a download link that doesn't exist; fixed every github.com/gxanshu/postcard link (404s) to github.com/Johnny70/WinPostcard; dropped the 'Made by Anshu' footer credit and the github.com/sponsors/gxanshu button per explicit user instruction, matching README's already-updated state. Wired the user-supplied domain johnnyjakobsson.com into canonical/OG URLs, robots.txt, sitemap.xml and site.yml's cname (previously all hardcoded to postcard.gxanshu.in, a domain this fork does not control). Verified __VERSION__ stamping still works via `sh web/build.sh`. After deleting release.yml, also cleaned up what depended on the assumption it existed: site.yml's keep_files:true (was there solely to avoid wiping release.yml's signed ostree repo/ on the pages branch -- no longer relevant, the site job is now the only thing publishing there) and its explanatory comment, robots.txt's Disallow: /repo/ rule (the ostree object store it referred to is never published now), and web/build.sh's docstring claim of being 'called by both publishers'."
+  }
+]

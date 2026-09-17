@@ -1,50 +1,49 @@
-"""Where an account's sign-in comes from: the system keyring for an account
-typed in by hand, GNOME Online Accounts for one imported from Settings."""
+"""Storing and retrieving an account's password in the Windows Credential
+Manager, via the `keyring` package.
 
-import gi
+MODULE: postcard.core.secrets
+RESPONSIBILITY: account password storage and sign-in credential lookup
+DEPENDS ON: keyring, .models.account, .net.auth
+EXPOSES: store_password, lookup_password, clear_password, credential_for
+"""
 
-gi.require_version("Secret", "1")
+import logging
 
-from gi.repository import Secret
+import keyring
+import keyring.errors
 
-from . import goa
 from .models.account import Account
 from .net.auth import Credential
 
-_SCHEMA = Secret.Schema.new(
-    "in.gxanshu.postcard.Account",
-    Secret.SchemaFlags.NONE,
-    {"account-id": Secret.SchemaAttributeType.INTEGER},
-)
+logger = logging.getLogger(__name__)
+
+_SERVICE = "in.gxanshu.postcard"
 
 
 def store_password(account_id: int, password: str) -> None:
-    Secret.password_store_sync(
-        _SCHEMA,
-        {"account-id": str(account_id)},
-        Secret.COLLECTION_DEFAULT,
-        f"Postcard account {account_id}",
-        password,
-        None,
-    )
+    keyring.set_password(_SERVICE, str(account_id), password)
 
 
 def lookup_password(account_id: int) -> str | None:
-    return Secret.password_lookup_sync(_SCHEMA, {"account-id": str(account_id)}, None)
+    try:
+        return keyring.get_password(_SERVICE, str(account_id))
+    except keyring.errors.KeyringError:
+        logger.exception(
+            "could not read account %d from Windows Credential Manager", account_id
+        )
+        return None
 
 
 def clear_password(account_id: int) -> bool:
-    return Secret.password_clear_sync(_SCHEMA, {"account-id": str(account_id)}, None)
+    try:
+        keyring.delete_password(_SERVICE, str(account_id))
+    except keyring.errors.PasswordDeleteError:
+        # Nothing was stored for this account: a normal False, not an error.
+        return False
+    return True
 
 
 def credential_for(account: Account) -> Credential | None:
-    """How to sign this account in, or None when we cannot.
-
-    Called from the worker thread: both branches block on IPC, and the Online
-    Accounts one can spend a network round trip refreshing an expired token.
-    """
-    if account.goa_id:
-        return goa.credential(account.goa_id)
-
+    """How to sign this account in, or None when we cannot."""
     password = lookup_password(account.id)
     return Credential(account.login_name, password) if password else None

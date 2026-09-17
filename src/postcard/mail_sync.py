@@ -39,6 +39,12 @@ logger = logging.getLogger(__name__)
 # how many recent messages to pull per sync
 RECENT_LIMIT = 50
 
+# The first time a folder is opened in a session, pull a much bigger backlog
+# than a routine sync would (still just headers -- bodies stay lazy) so a
+# freshly started app has real history to scroll through, not just 50
+# messages, without the user paging back manually.
+INITIAL_SYNC_LIMIT = 1000
+
 # RFC 8058: the body is the whole request, and the server matches it verbatim.
 ONE_CLICK_BODY = b"List-Unsubscribe=One-Click"
 
@@ -431,7 +437,7 @@ class _HttpsOnlyRedirect(urllib.request.HTTPRedirectHandler):
 # Names the app rather than mimicking a browser: bot filters reject the default
 # urllib agent, not an honest one. No version -- it would have to be threaded
 # down from main() for nothing, since no list branches on it.
-UNSUBSCRIBE_USER_AGENT = "Postcard (+https://postcard.gxanshu.in)"
+UNSUBSCRIBE_USER_AGENT = "WinPostcard (+https://postcard.gxanshu.in)"
 
 _unsubscribe_opener = urllib.request.build_opener(_HttpsOnlyRedirect())
 

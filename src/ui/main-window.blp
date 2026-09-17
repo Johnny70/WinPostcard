@@ -2,7 +2,7 @@ using Gtk 4.0;
 using Adw 1;
 
 template $PostcardMainWindow: Adw.ApplicationWindow {
-  title: _("Postcard");
+  title: _("WinPostcard");
   default-width: 1600;
   default-height: 900;
 
@@ -26,7 +26,7 @@ template $PostcardMainWindow: Adw.ApplicationWindow {
 
         content: Adw.StatusPage {
           icon-name: "in.gxanshu.postcard-symbolic";
-          title: _("Welcome to Postcard");
+          title: _("Welcome to WinPostcard");
           description: _("Add a mail account to get started.");
           child: Gtk.Box {
             orientation: vertical;
@@ -37,12 +37,6 @@ template $PostcardMainWindow: Adw.ApplicationWindow {
               label: _("Add Account");
 
               styles ["suggested-action", "pill"]
-            }
-
-            Gtk.Button online_accounts_button {
-              label: _("Use Online Accounts");
-
-              styles ["pill"]
             }
           };
         };
@@ -101,7 +95,7 @@ template $PostcardMainWindow: Adw.ApplicationWindow {
         };
 
         content: Adw.NavigationPage {
-          title: _("Postcard");
+          title: _("WinPostcard");
           child: Adw.NavigationSplitView inner_split {
             sidebar-width-unit: px;
 
@@ -351,12 +345,12 @@ menu primary_menu {
       action: "win.add-account";
     }
     item {
-      label: _("_Online Accounts");
-      action: "win.online-accounts";
-    }
-    item {
       label: _("_Manage Accounts");
       action: "win.manage-accounts";
+    }
+    item {
+      label: _("_Rules");
+      action: "win.manage-rules";
     }
   }
 
@@ -370,7 +364,7 @@ menu primary_menu {
       action: "app.shortcuts";
     }
     item {
-      label: _("_About Postcard");
+      label: _("_About WinPostcard");
       action: "app.about";
     }
   }

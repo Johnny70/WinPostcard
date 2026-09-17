@@ -16,7 +16,7 @@ from urllib.parse import urlparse
 
 from gi.repository import Adw, Gdk, Gio, GLib, GObject, Graphene, Gtk
 
-from . import mail_sync, message_view
+from . import mail_sync
 from .account_dialog import PostcardAccountDialog
 from .accounts_dialog import PostcardAccountsDialog
 from .avatar_loader import AvatarLoader
@@ -33,9 +33,10 @@ from .core.net import errors, imap_session
 from .core.store.database import Database
 from .folder_row import FolderRow
 from .message_view import LoadCallback, MessageView
-from .online_accounts_dialog import PostcardOnlineAccountsDialog
+from .rules_dialog import PostcardRulesDialog
 from .window_types import (
     ALL_INBOXES_ID,
+    DEFAULT_SYNC_OPTIONS,
     FOLDER_SYNC_COOLDOWN_SECONDS,
     MAIL_ACTIONS,
     MOVE_UNDO_MS,
@@ -52,6 +53,8 @@ from .window_types import (
     FlagChange,
     OutboxResult,
     PendingMove,
+    RuleMove,
+    SyncOptions,
 )
 
 if TYPE_CHECKING:
@@ -116,7 +119,6 @@ class PostcardMainWindow(Adw.ApplicationWindow):
     thread_box: Gtk.Box = Gtk.Template.Child()
     main_stack: Gtk.Stack = Gtk.Template.Child()
     add_account_button: Gtk.Button = Gtk.Template.Child()
-    online_accounts_button: Gtk.Button = Gtk.Template.Child()
     refresh_button: Gtk.Button = Gtk.Template.Child()
     search_bar: Gtk.SearchBar = Gtk.Template.Child()
     search_entry: Gtk.SearchEntry = Gtk.Template.Child()
@@ -242,7 +244,6 @@ class PostcardMainWindow(Adw.ApplicationWindow):
 
     def _connect_widgets(self) -> None:
         self.add_account_button.connect("clicked", self._on_add_account_clicked)
-        self.online_accounts_button.connect("clicked", self._on_online_accounts_clicked)
         self.refresh_button.connect("clicked", self._on_refresh_clicked)
         self.compose_button.connect("clicked", self._on_compose_clicked)
         self.reply_all_button.connect("clicked", self._on_reply_all_clicked)
@@ -418,9 +419,6 @@ class PostcardMainWindow(Adw.ApplicationWindow):
         self._settings.set_int(
             SETTING_CONVERSATION_WIDTH, int(self.inner_split.get_min_sidebar_width())
         )
-        # Nothing on screen to render, so give the ~300 MB web process back.
-        message_view.release_anchor()
-
         if self._settings.get_boolean("run-in-background"):
             # _on_map renders the reading pane again when the window returns.
             self._rendered_id = None
@@ -484,6 +482,62 @@ class PostcardMainWindow(Adw.ApplicationWindow):
         dialog.connect("closed", lambda *_: self.reload_accounts())
         dialog.present(self)
 
+    # Rules are per-account (a destination folder only means something within
+    # one account's own mailbox), so this needs one selected -- same account
+    # a compose started from this window would use.
+    def _on_manage_rules(self, *_args: object) -> None:
+        if self._account is None:
+            return
+        dialog = PostcardRulesDialog(self._db, self._account)
+        dialog.connect("rule-created", self._on_rule_created)
+        dialog.present(self)
+
+    # A rule applies to mail already in the inbox the moment it's created,
+    # not just mail arriving from then on -- the same move machinery as
+    # _apply_rules, just sourced from what's already stored locally instead
+    # of a fresh sync's fetched headers.
+    def _on_rule_created(self, _dialog: PostcardRulesDialog, rule_id: int) -> None:
+        if self._account is None:
+            return
+        rule = self._db.get_rule(rule_id)
+        if rule is None:
+            return
+        dest = self._db.get_folder(rule.folder_id)
+        if dest is None:
+            return
+        inbox = next(
+            (
+                folder
+                for folder in self._db.folders_for_account(self._account.id)
+                if mail_sync.role_for_folder(folder.name) is mail_sync.FolderRole.INBOX
+            ),
+            None,
+        )
+        if inbox is None or inbox.id == dest.id:
+            return
+
+        matches = self._db.emails_by_sender(inbox.id, rule.sender_address)
+        pairs = [
+            (email.id, email.server_id)
+            for email in matches
+            if email.server_id is not None
+        ]
+        if not pairs:
+            return
+
+        self._db.move_emails([email_id for email_id, _uid in pairs], dest.id)
+        self._run_rule_move_worker(
+            RuleMove(
+                account=self._account,
+                email_ids=tuple(email_id for email_id, _uid in pairs),
+                uids=tuple(uid for _email_id, uid in pairs),
+                source=inbox,
+                dest=dest,
+            )
+        )
+        self._reload_folders()
+        self._refresh_conversations()
+
     # Re-read accounts after they change (add/remove). _reload_folders picks a
     # new folder if the open one went with a deleted account.
     def reload_accounts(self) -> None:
@@ -501,11 +555,6 @@ class PostcardMainWindow(Adw.ApplicationWindow):
 
     def _on_add_account_clicked(self, *_args: object) -> None:
         dialog = PostcardAccountDialog(self._db)
-        dialog.connect("account-added", self._on_account_added)
-        dialog.present(self)
-
-    def _on_online_accounts_clicked(self, *_args: object) -> None:
-        dialog = PostcardOnlineAccountsDialog(self._db)
         dialog.connect("account-added", self._on_account_added)
         dialog.present(self)
 
@@ -655,8 +704,8 @@ class PostcardMainWindow(Adw.ApplicationWindow):
             ("refresh", self._on_refresh_clicked),
             ("search", self._on_search_action),
             ("add-account", self._on_add_account_clicked),
-            ("online-accounts", self._on_online_accounts_clicked),
             ("manage-accounts", self._on_manage_accounts),
+            ("manage-rules", self._on_manage_rules),
         ):
             _register(self, name, handler)
         _register(self, "move", self._on_move, _MOVE_PARAM_TYPE)
@@ -1299,6 +1348,97 @@ class PostcardMainWindow(Adw.ApplicationWindow):
             self._toast(_("Move failed: {msg}").format(msg=result.error))
         return False
 
+    # --- rule-triggered moves ------------------------------------------
+    # Same worker-thread/GLib.idle_add shape as the manual move flow above,
+    # without its undo-toast/tombstone machinery: a rule has no "undo" UI,
+    # so on any failure the local placeholder just goes back to `source`
+    # instead of staying an orphaned, UID-less row in `dest`.
+
+    def _run_rule_move_worker(self, move: RuleMove) -> None:
+        thread = threading.Thread(
+            target=self._rule_move_worker,
+            args=(move,),
+            daemon=True,
+        )
+        thread.start()
+
+    # Runs on the worker thread: network only, no Gtk/database access.
+    def _rule_move_worker(self, move: RuleMove) -> None:
+        credential = secrets.credential_for(move.account)
+        if credential is None:
+            logger.warning(
+                "could not sign in to account %s to run a mail rule",
+                move.account.email,
+            )
+            GLib.idle_add(self._on_rule_move_failed, move)
+            return
+        try:
+            result = mail_sync.move_messages(
+                move.account,
+                credential,
+                move.source.name,
+                list(move.uids),
+                move.dest.name,
+            )
+            GLib.idle_add(self._on_rule_move_result, move, result)
+        except Exception:
+            logger.exception(
+                "mail rule move of %d message(s) from %s to %s failed (account %s)",
+                len(move.uids),
+                move.source.name,
+                move.dest.name,
+                move.account.email,
+            )
+            GLib.idle_add(self._on_rule_move_failed, move)
+
+    def _on_rule_move_result(
+        self, move: RuleMove, result: mail_sync.MoveResult
+    ) -> bool:
+        completed = len(result.destination_uids)
+        completed_moves = list(
+            zip(
+                move.email_ids[:completed],
+                [move.dest.id] * completed,
+                result.destination_uids,
+                strict=True,
+            )
+        )
+        if completed_moves:
+            self._db.reconcile_moved_emails(completed_moves)
+        if completed < len(move.uids):
+            # Whatever didn't make it across is still really in `source` on
+            # the server -- put its local placeholder back rather than leave
+            # an orphaned, UID-less row sitting in `dest`.
+            failed_originals = [
+                (email_id, move.source.id, uid)
+                for email_id, uid in zip(
+                    move.email_ids[completed:], move.uids[completed:], strict=True
+                )
+            ]
+            self._db.reconcile_moved_emails(failed_originals)
+            logger.warning(
+                "mail rule moved only %d of %d message(s) from %s to %s: %s",
+                completed,
+                len(move.uids),
+                move.source.name,
+                move.dest.name,
+                result.error,
+            )
+        self._reload_folders()
+        self._refresh_conversations()
+        return False
+
+    def _on_rule_move_failed(self, move: RuleMove) -> bool:
+        # Never reached the server at all -- put every local placeholder back.
+        originals = [
+            (email_id, move.source.id, uid)
+            for email_id, uid in zip(move.email_ids, move.uids, strict=True)
+        ]
+        self._db.reconcile_moved_emails(originals)
+        self._reload_folders()
+        self._refresh_conversations()
+        return False
+
     def _on_move_sign_in_failed(self, pending: PendingMove) -> bool:
         # The messages were already moved locally, so they have to come back.
         self._restore_move(pending)
@@ -1536,14 +1676,29 @@ class PostcardMainWindow(Adw.ApplicationWindow):
         for shown in self._view_folders():
             age = time.monotonic() - self._folder_sync_times.get(shown.id, 0.0)
             if age >= FOLDER_SYNC_COOLDOWN_SECONDS:
+                # _loaded_counts starts empty every launch and is only ever
+                # filled in by a completed sync of that folder -- absent here
+                # means this session has never actually loaded it yet (this
+                # is the very first look at it, whether that's the app just
+                # opening or a folder clicked for the first time this run),
+                # so pull real history instead of the routine-refresh amount.
+                is_first_look_this_session = shown.id not in self._loaded_counts
                 self._start_sync(
                     self._accounts[shown.account_id],
                     in_background=True,
-                    folder_name=shown.name,
-                    # Every other folder's badge is a STATUS round trip, and
-                    # switching folders shouldn't wait on them; the poll timer
-                    # and a manual refresh still bring them up to date.
-                    should_count_unread=False,
+                    options=SyncOptions(
+                        folder_name=shown.name,
+                        # Every other folder's badge is a STATUS round trip,
+                        # and switching folders shouldn't wait on them; the
+                        # poll timer and a manual refresh still bring them
+                        # up to date.
+                        should_count_unread=False,
+                        limit=(
+                            mail_sync.INITIAL_SYNC_LIMIT
+                            if is_first_look_this_session
+                            else mail_sync.RECENT_LIMIT
+                        ),
+                    ),
                 )
 
     # Rebuilding the tree destroys every row, which resets the user's
@@ -1791,8 +1946,10 @@ class PostcardMainWindow(Adw.ApplicationWindow):
             self._start_sync(
                 self._accounts[folder.account_id],
                 in_background=True,
-                folder_name=folder.name,
-                offset=self._loaded_counts.get(folder.id, 0),
+                options=SyncOptions(
+                    folder_name=folder.name,
+                    offset=self._loaded_counts.get(folder.id, 0),
+                ),
             )
 
     # (position, n_items) come from the signal; we just re-read the current
@@ -2075,8 +2232,6 @@ class PostcardMainWindow(Adw.ApplicationWindow):
 
         self._toast(_("Saved {name}.").format(name=attachment.filename))
 
-    # Not /tmp: Flatpak gives the instance a private one, and the document
-    # portal can't hand a file from there to another app -- the launch fails.
     def _open_attachment(self, attachment: Attachment) -> None:
         # Server-supplied name; "../../.bashrc" would otherwise escape the dir.
         name = Path(attachment.filename).name or "attachment"
@@ -2308,9 +2463,7 @@ class PostcardMainWindow(Adw.ApplicationWindow):
         self,
         account: Account,
         in_background: bool = False,
-        folder_name: str | None = None,
-        offset: int = 0,
-        should_count_unread: bool = True,
+        options: SyncOptions = DEFAULT_SYNC_OPTIONS,
     ) -> None:
         # Don't pile background syncs (folder clicks, the poll timer) on top of
         # one already running for the same account.
@@ -2322,7 +2475,7 @@ class PostcardMainWindow(Adw.ApplicationWindow):
             self.conversation_stack.set_visible_child_name(PAGE_LOADING)
         thread = threading.Thread(
             target=self._sync_worker,
-            args=(account, folder_name, offset, should_count_unread),
+            args=(account, options),
             daemon=True,
         )
         thread.start()
@@ -2338,7 +2491,7 @@ class PostcardMainWindow(Adw.ApplicationWindow):
             self._start_sync(
                 account,
                 in_background=in_background,
-                folder_name=open_names.get(account.id),
+                options=SyncOptions(folder_name=open_names.get(account.id)),
             )
 
     # Refresh on a timer using the configured interval (0 = manual only).
@@ -2358,13 +2511,7 @@ class PostcardMainWindow(Adw.ApplicationWindow):
         return True
 
     # Runs on the worker thread: network only, no Gtk/database access.
-    def _sync_worker(
-        self,
-        account: Account,
-        folder_name: str | None,
-        offset: int = 0,
-        should_count_unread: bool = True,
-    ) -> None:
+    def _sync_worker(self, account: Account, options: SyncOptions) -> None:
         credential = secrets.credential_for(account)
         if credential is None:
             logger.warning("could not sign in to account %s", account.email)
@@ -2380,17 +2527,18 @@ class PostcardMainWindow(Adw.ApplicationWindow):
             result = mail_sync.fetch_mailbox(
                 account,
                 credential,
-                folder_name,
-                offset=offset,
-                should_count_unread=should_count_unread,
+                options.folder_name,
+                limit=options.limit,
+                offset=options.offset,
+                should_count_unread=options.should_count_unread,
             )
         except Exception as error:
             logger.exception(
                 "sync failed for %s on %s (folder %s, offset %d)",
                 account.email,
                 account.imap_host,
-                folder_name or "inbox",
-                offset,
+                options.folder_name or "inbox",
+                options.offset,
             )
             is_auth_failure, message = errors.classify(error, account.imap_host)
             GLib.idle_add(self._on_sync_error, account, is_auth_failure, message)
@@ -2445,12 +2593,20 @@ class PostcardMainWindow(Adw.ApplicationWindow):
             account.id, result.folder, mail_sync.icon_for_folder(result.folder)
         )
         new_messages: list[mail_sync.MessageHeader] = []
+        newly_added: list[mail_sync.MessageHeader] = []
         for message in result.messages:
             if (target.id, message.uid) in self._move_tombstones:
                 continue
             added = self._db.save_incoming_email(target.id, message)
-            if added and message.is_unread:
-                new_messages.append(message)
+            if added:
+                newly_added.append(message)
+                if message.is_unread:
+                    new_messages.append(message)
+        moved_uids = self._apply_rules(account, target, newly_added)
+        if moved_uids:
+            # A rule-matched message never visibly arrived in this folder --
+            # it was moved out before the user could see it there.
+            new_messages = [m for m in new_messages if m.uid not in moved_uids]
         if result.all_uids is not None:
             self._db.prune_stale_emails(target.id, result.all_uids)
             # Do this after filtering the fetched headers: an older snapshot
@@ -2482,6 +2638,52 @@ class PostcardMainWindow(Adw.ApplicationWindow):
 
         self._notify_arrivals(account.id, new_messages, target.id, arrived_elsewhere)
         return False
+
+    # Move newly-arrived mail into its rule's folder before the caller ever
+    # shows it in `source` -- classic mail-rule behaviour, applied only to
+    # mail added by this sync, never retroactively to what's already there.
+    # Returns the UIDs that matched, so the caller can skip notifying about
+    # mail that never stayed visible in `source` to begin with.
+    def _apply_rules(
+        self,
+        account: Account,
+        source: Folder,
+        messages: list[mail_sync.MessageHeader],
+    ) -> set[str]:
+        rules = self._db.rules_for_account(account.id)
+        if not rules:
+            return set()
+        rule_by_sender = {rule.sender_address.lower(): rule for rule in rules}
+
+        moves_by_dest: dict[int, list[tuple[int, str]]] = {}
+        matched_uids: set[str] = set()
+        for message in messages:
+            rule = rule_by_sender.get(message.sender_address.lower())
+            if rule is None or rule.folder_id == source.id:
+                continue
+            email_id = self._db.email_id_for(source.id, message.uid)
+            if email_id is None:
+                continue
+            moves_by_dest.setdefault(rule.folder_id, []).append((email_id, message.uid))
+            matched_uids.add(message.uid)
+
+        for dest_id, pairs in moves_by_dest.items():
+            dest = self._db.get_folder(dest_id)
+            if dest is None:
+                continue
+            email_ids = tuple(email_id for email_id, _uid in pairs)
+            uids = tuple(uid for _email_id, uid in pairs)
+            self._db.move_emails(list(email_ids), dest.id)
+            self._run_rule_move_worker(
+                RuleMove(
+                    account=account,
+                    email_ids=email_ids,
+                    uids=uids,
+                    source=source,
+                    dest=dest,
+                )
+            )
+        return matched_uids
 
     # Notification ids carry the account: every account syncs on the same tick,
     # and a repeated id replaces the notification already on screen.
@@ -2589,7 +2791,10 @@ class PostcardMainWindow(Adw.ApplicationWindow):
 
     def _show_offline_banner(self) -> None:
         self._show_connection_banner(
-            _("You're offline. Postcard will reconnect when your connection returns.")
+            _(
+                "You're offline. WinPostcard will reconnect when your "
+                "connection returns."
+            )
         )
 
     def _on_banner_retry(self, _banner: Adw.Banner) -> None:
@@ -2626,7 +2831,9 @@ class PostcardMainWindow(Adw.ApplicationWindow):
         if app is None:
             return
 
-        notification = Gio.Notification.new(_("Postcard is running in the background"))
+        notification = Gio.Notification.new(
+            _("WinPostcard is running in the background")
+        )
         notification.set_body(_("It will keep checking for new mail. Quit to stop."))
         notification.set_default_action("app.focus-mail")
         app.send_notification("running-background", notification)

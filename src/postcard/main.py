@@ -14,7 +14,7 @@ _LOG_FORMAT = "%(asctime)s %(levelname)-8s %(name)s: %(message)s"
 
 
 def _configure_logging() -> None:
-    """Log to stderr, which journald captures for the Flatpak.
+    """Log to stderr.
 
     WARNING by default so a normal run stays quiet; POSTCARD_LOG=debug (or any
     level name) turns it up without a rebuild. G_MESSAGES_DEBUG only affects

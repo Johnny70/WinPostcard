@@ -1,5 +1,5 @@
 name: Bug report
-description: Something in Postcard is broken or behaves unexpectedly
+description: Something in WinPostcard is broken or behaves unexpectedly
 labels: [bug]
 body:
   - type: markdown
@@ -36,7 +36,7 @@ body:
       label: Steps to reproduce
       description: Numbered steps someone else can follow from a fresh start.
       placeholder: |
-        1. Open Postcard with a Gmail account added
+        1. Open WinPostcard with a Gmail account added
         2. Select the Inbox
         3. Click a message that has a PDF attached
         4. The window disappears
@@ -86,7 +86,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: Postcard version
+      label: WinPostcard version
       description: Shown in the app's About dialog, or run `flatpak info in.gxanshu.postcard`.
       placeholder: "1.10.1"
     validations:

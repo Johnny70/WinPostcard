@@ -28,8 +28,8 @@
 		</key>
 		<key name="start-at-login" type="b">
 			<default>false</default>
-			<summary>Start Postcard at login</summary>
-			<description>Whether Postcard has been set to start hidden at login. The desktop portal owns the autostart entry where it has one, otherwise Postcard writes it; this only records the result.</description>
+			<summary>Start WinPostcard at login</summary>
+			<description>Whether WinPostcard has been set to start hidden at login. The desktop portal owns the autostart entry where it has one, otherwise WinPostcard writes it; this only records the result.</description>
 		</key>
 		<key name="background-notice-shown" type="b">
 			<default>false</default>

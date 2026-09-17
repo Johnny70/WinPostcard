@@ -8,8 +8,7 @@ from gettext import gettext as _
 
 import gi
 
-gi.require_version("JavaScriptCore", "6.0")
-gi.require_version("WebKit", "6.0")
+gi.require_version("WebView2Gtk", "1.0")
 
 from gi.repository import (
     Adw,
@@ -18,9 +17,13 @@ from gi.repository import (
     GLib,
     GObject,
     Gtk,
-    JavaScriptCore,
     Pango,
-    WebKit,
+)
+
+# WebView2Gtk has no PyGObject-stubs entry (it's this project's own fork's
+# GIR, not a package PyGObject-stubs ships) -- pyright cannot see it exists.
+from gi.repository import (
+    WebView2Gtk as WebKit,  # pyright: ignore[reportAttributeAccessIssue]
 )
 
 from . import mail_sync
@@ -296,17 +299,16 @@ class PostcardComposerWindow(Adw.Window):
     # --- editor ------------------------------------------------------------
 
     def _build_editor(self) -> None:
-        manager = WebKit.UserContentManager()
+        self._webview = WebKit.WebView(hexpand=True, vexpand=True)
+        # Set before the first attach (on append below) -- avoids the flash
+        # of WebView2's own opaque-white default while it's brand new, and
+        # lets the Adwaita "card" behind it supply the background so the
+        # editor tracks the theme without hardcoding its colours.
+        self._webview.set_background_color(Gdk.RGBA(red=0, green=0, blue=0, alpha=0))
+        manager = self._webview.get_user_content_manager()
         manager.register_script_message_handler("editor", None)
         manager.connect("script-message-received::editor", self._on_editor_changed)
 
-        self._webview = WebKit.WebView(
-            user_content_manager=manager, hexpand=True, vexpand=True
-        )
-        self._webview.get_settings().set_auto_load_images(False)
-        # Transparent, so the Adwaita "card" behind it supplies the background
-        # and the editor tracks the theme without hardcoding its colours.
-        self._webview.set_background_color(Gdk.RGBA(red=0, green=0, blue=0, alpha=0))
         family, size = _gtk_font()
         self._webview.load_html(
             _EDITOR_PAGE.format(
@@ -320,7 +322,7 @@ class PostcardComposerWindow(Adw.Window):
         self.body_container.append(self._webview)
 
     def _on_editor_changed(
-        self, _manager: WebKit.UserContentManager, value: JavaScriptCore.Value
+        self, _manager: WebKit.UserContentManager, value: WebKit.JavaScriptResult
     ) -> None:
         payload = json.loads(value.to_string())
         self._body_html = payload["html"]

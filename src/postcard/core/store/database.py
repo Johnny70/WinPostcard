@@ -16,6 +16,7 @@ from ..models.conversation import Conversation
 from ..models.email import Email
 from ..models.folder import Folder
 from ..models.message_header import MessageHeader
+from ..models.rule import Rule
 
 # Every column _email_from_row reads
 _EMAIL_COLUMNS = """
@@ -167,6 +168,19 @@ class Database:
                 name TEXT NOT NULL DEFAULT ''
             );
 
+            -- Move mail from a sender straight to a folder as it arrives.
+            -- One rule per (account, sender): adding another for the same
+            -- sender replaces where it points rather than creating a second.
+            CREATE TABLE IF NOT EXISTS rules (
+                id INTEGER PRIMARY KEY,
+                account_id INTEGER NOT NULL REFERENCES accounts(id),
+                sender_address TEXT NOT NULL,
+                folder_id INTEGER NOT NULL REFERENCES folders(id)
+            );
+
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_rules_sender
+                ON rules (account_id, sender_address);
+
             -- Full-text search index over the searchable columns. It mirrors
             -- the emails table (content='emails'), so triggers keep it in sync.
             CREATE VIRTUAL TABLE IF NOT EXISTS emails_fts USING fts5(
@@ -209,7 +223,6 @@ class Database:
             imap_security=row["imap_security"],
             smtp_security=row["smtp_security"],
             username=row["username"],
-            goa_id=row["goa_id"],
         )
 
     def accounts(self) -> list[Account]:
@@ -227,7 +240,6 @@ class Database:
         imap_security: str = SECURITY_TLS,
         smtp_security: str | None = None,
         username: str = "",
-        goa_id: str = "",
     ) -> Account:
         if smtp_security is None:
             # Port 465 is implicit TLS (SMTPS); everything else is assumed to
@@ -239,8 +251,8 @@ class Database:
             """
             INSERT INTO accounts
                 (email, display_name, imap_host, imap_port, smtp_host, smtp_port,
-                 imap_security, smtp_security, username, goa_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 imap_security, smtp_security, username)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 email,
@@ -252,7 +264,6 @@ class Database:
                 imap_security,
                 smtp_security,
                 username,
-                goa_id,
             ),
         )
         self._conn.commit()
@@ -302,6 +313,12 @@ class Database:
         row = self._conn.execute(
             "SELECT * FROM folders WHERE account_id = ? AND name = ?",
             (account_id, name),
+        ).fetchone()
+        return self._folder_from_row(row) if row else None
+
+    def get_folder(self, folder_id: int) -> Folder | None:
+        row = self._conn.execute(
+            "SELECT * FROM folders WHERE id = ?", (folder_id,)
         ).fetchone()
         return self._folder_from_row(row) if row else None
 
@@ -359,12 +376,74 @@ class Database:
             self._delete_folder_tree(row["id"])
         self._conn.commit()
 
+    # --- rules --------------------------------------------------------------
+
+    def _rule_from_row(self, row: sqlite3.Row) -> Rule:
+        return Rule(
+            id=row["id"],
+            account_id=row["account_id"],
+            sender_address=row["sender_address"],
+            folder_id=row["folder_id"],
+        )
+
+    def rules_for_account(self, account_id: int) -> list[Rule]:
+        rows = self._conn.execute(
+            "SELECT * FROM rules WHERE account_id = ? ORDER BY sender_address",
+            (account_id,),
+        ).fetchall()
+        return [self._rule_from_row(row) for row in rows]
+
+    def get_rule(self, rule_id: int) -> Rule | None:
+        row = self._conn.execute(
+            "SELECT * FROM rules WHERE id = ?", (rule_id,)
+        ).fetchone()
+        return self._rule_from_row(row) if row else None
+
+    # One rule per (account, sender): adding another for a sender that
+    # already has one repoints it instead of creating a second, ambiguous
+    # rule for the same address.
+    def save_rule(self, account_id: int, sender_address: str, folder_id: int) -> Rule:
+        self._conn.execute(
+            """
+            INSERT INTO rules (account_id, sender_address, folder_id)
+            VALUES (?, ?, ?)
+            ON CONFLICT (account_id, sender_address) DO UPDATE SET
+                folder_id = excluded.folder_id
+            """,
+            (account_id, sender_address, folder_id),
+        )
+        self._conn.commit()
+        row = self._conn.execute(
+            "SELECT * FROM rules WHERE account_id = ? AND sender_address = ?",
+            (account_id, sender_address),
+        ).fetchone()
+        assert row is not None
+        return self._rule_from_row(row)
+
+    def delete_rule(self, rule_id: int) -> None:
+        self._conn.execute("DELETE FROM rules WHERE id = ?", (rule_id,))
+        self._conn.commit()
+
     # --- emails -----------------------------------------------------------
 
     def emails_in_folder(self, folder_id: int) -> list[Email]:
         rows = self._conn.execute(
             f"SELECT {_EMAIL_COLUMNS} FROM emails WHERE folder_id = ? ORDER BY id DESC",
             (folder_id,),
+        ).fetchall()
+        return [self._email_from_row(row) for row in rows]
+
+    # A synced message always has a server_id; excluding NULL ones keeps a
+    # newly-created rule's retroactive pass off local-only rows (a Sent copy
+    # awaiting its own send) that were never fetched from this folder.
+    def emails_by_sender(self, folder_id: int, sender_address: str) -> list[Email]:
+        rows = self._conn.execute(
+            f"""
+            SELECT {_EMAIL_COLUMNS} FROM emails
+            WHERE folder_id = ? AND sender_address = ? AND server_id IS NOT NULL
+            ORDER BY id DESC
+            """,
+            (folder_id, sender_address),
         ).fetchall()
         return [self._email_from_row(row) for row in rows]
 
@@ -593,6 +672,13 @@ class Database:
             "SELECT * FROM emails WHERE id = ?", (cursor.lastrowid,)
         ).fetchone()
         return self._email_from_row(row)
+
+    def email_id_for(self, folder_id: int, server_id: str) -> int | None:
+        row = self._conn.execute(
+            "SELECT id FROM emails WHERE folder_id = ? AND server_id = ?",
+            (folder_id, server_id),
+        ).fetchone()
+        return row["id"] if row is not None else None
 
     def save_incoming_email(self, folder_id: int, header: MessageHeader) -> bool:
         """Insert one fetched email, or update the flags of one we already have.

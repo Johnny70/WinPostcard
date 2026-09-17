@@ -1,4 +1,4 @@
-# Dev tooling config. None of this is needed to build or run the Flatpak —
+# Dev tooling config. None of this is needed to `just run` the app —
 # it only powers your editor's linting, formatting, and type checking.
 
 [tool.ruff]
@@ -42,7 +42,6 @@ max-args = 5
 # so each file keeps a single key.)
 "src/postcard/application.py" = ["E402"]
 "src/postcard/core/avatars.py" = ["E402"]
-"src/postcard/core/secrets.py" = ["E402"]
 "tests/core/test_avatars.py" = ["E402"]
 
 # A test double has to match the signature of the thing it stands in for, so
@@ -50,6 +49,9 @@ max-args = 5
 # into the internals of the thing under test -- the suite already covers
 # module-private helpers like _arrival_key and _fts_query.
 "tests/*" = ["ARG", "SLF001"]
+# _FakeWinReg mirrors winreg's actual (non-PEP8) function names exactly, since
+# it stands in for that module in autostart's tests.
+"tests/core/test_autostart.py" = ["N802"]
 
 # --- Permanent carve-outs, with the reason -----------------------------------
 # Account/Email/Folder are GObject.Object subclasses because Gio.ListStore only
@@ -73,8 +75,8 @@ max-args = 5
 "src/postcard/core/threader.py" = ["C901"]
 
 [tool.pytest.ini_options]
-# The package isn't installed (meson does that at Flatpak build time), so point
-# pytest at the src layout directly — no conftest.py or editable install needed.
+# The package isn't installed into the venv, so point pytest at the src
+# layout directly — no conftest.py or editable install needed for this.
 pythonpath = ["src"]
 testpaths = ["tests"]
 
@@ -84,8 +86,10 @@ testpaths = ["tests"]
 typeCheckingMode = "basic"
 pythonVersion = "3.12"
 include = ["src/postcard"]
-# The package is never installed into the .venv (it ships as a Flatpak), so
-# tests import it off the source tree — same as pytest's pythonpath setting.
+# The package is never installed into the .venv, so tests import it off the
+# source tree — same as pytest's pythonpath setting. The ucrt64 path is where
+# gi/cairo/PIL actually live (pacman packages, not pip) -- pyright does not
+# follow pyvenv.cfg's include-system-site-packages on its own.
 extraPaths = ["src"]
 venvPath = "."
 venv = ".venv"

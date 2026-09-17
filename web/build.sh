@@ -1,9 +1,8 @@
 #!/bin/sh -eu
 # Assemble the static site into $1 (default: site/), stamping the current version.
 #
-# Called by both publishers: .github/workflows/site.yml for copy-only edits, and
-# release.yml, which then drops the signed ostree repo in beside it. The version
-# is read from meson.build so the page can never drift from the release.
+# Called by .github/workflows/site.yml. The version is read from meson.build so
+# the page can never drift from the project version.
 #
 # Local preview:  sh web/build.sh /tmp/site && python3 -m http.server -d /tmp/site
 

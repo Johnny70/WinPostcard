@@ -1,0 +1,45 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $PostcardRuleDialog: Adw.Dialog {
+    title: _("Add Rule");
+    content-width: 420;
+    content-height: 280;
+
+    child: Adw.ToolbarView {
+        [top]
+        Adw.HeaderBar {
+            show-start-title-buttons: false;
+            show-end-title-buttons: false;
+
+            [start]
+            Gtk.Button cancel_button {
+                label: _("Cancel");
+              }
+
+            [end]
+            Gtk.Button add_button {
+                label: _("Add");
+                sensitive: false;
+
+                styles ["suggested-action"]
+              }
+          }
+
+          content: Adw.PreferencesPage {
+              Adw.PreferencesGroup {
+                  title: _("Rule");
+                  description: _("Mail from this sender moves to the chosen folder as soon as it arrives.");
+
+                  Adw.EntryRow sender_row {
+                      title: _("From");
+                      input-purpose: email;
+                    }
+
+                  Adw.ComboRow folder_row {
+                      title: _("Move to Folder");
+                    }
+                }
+            };
+      };
+  }

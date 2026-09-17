@@ -1,33 +1,32 @@
-# Postcard — task runner (Flatpak-first)
+# WinPostcard — task runner
 # Run `just` with no args to see all recipes.
 #
-# Postcard is built and run as a Flatpak — the exact same way it ships to users.
-#   just init    (one time)  install the GNOME runtime + SDK this app needs
-#   just build               build the Flatpak from your working tree
-#   just run                 build, then launch it in the Flatpak sandbox
+# WinPostcard is a Windows app: GTK4, libadwaita and PyGObject come from
+# MSYS2's UCRT64 packages (there is no other system package manager for GTK
+# on Windows). See docs/windows-setup.md for the one-time MSYS2 setup.
 #
-# The Flatpak build compiles your CURRENT working tree (uncommitted edits
-# included) — the manifest uses a "dir" source, so no need to commit first.
-#
-# Requires: flatpak, flatpak-builder. (meson/ninja/python come from the SDK.)
-
-app-id   := "in.gxanshu.postcard"
-manifest := app-id + ".json"
-
-# Read straight from meson.build so the bundle filename always matches the
-# version in the metainfo release entry — no separate place to update.
-version  := `grep -m1 "version:" meson.build | sed -E "s/.*'([^']+)'.*/\1/"`
-
-# flatpak-builder writes its build tree + local repo here (kept out of git).
-fp-builddir := ".flatpak/build"
-fp-repo     := ".flatpak/repo"
-bundle      := "postcard-" + version + ".flatpak"
+#   just init              (one time)  pacman-install the GTK4/libadwaita/
+#                                      PyGObject stack and create the dev venv
+#   just init-webview2gtk  (one time, and after that repo's source changes)
+#                                      build the webview2-gtk fork (HTML mail)
+#   just build                        compile blueprints -> gresource -> gschema
+#   just run                          build, then launch WinPostcard from source
 
 # A plain host meson build dir, used ONLY by `pot` to regenerate translations.
-# The app is never *built* or *run* from here — see `build`/`run`.
 builddir := "build"
 
-python := if path_exists(".venv/bin/python") == "true" { ".venv/bin/python" } else { "python3" }
+# Unix-style, not "C:/..." -- Git Bash mis-splits a drive-letter colon when
+# this gets joined into a colon-separated $PATH below, so every recipe below
+# builds paths from this instead of hardcoding "C:/...". MSYS auto-converts
+# it back to a real Windows path when spawning python.exe, blueprint-compiler
+# etc.
+ucrt64-dir := env_var_or_default("UCRT64_DIR", "/c/msys64/ucrt64")
+python := if path_exists(".venv/bin/python.exe") == "true" { ".venv/bin/python.exe" } else { "python" }
+
+# webview2-gtk (HTML mail rendering/composing) is a separate fork/repo, not
+# part of this one -- see docs/devlog.json. Default: a sibling checkout.
+webview2gtk-dir := env_var_or_default("WEBVIEW2GTK_DIR", "../webview2-gtk")
+webview2gtk-stage := webview2gtk-dir / "build/install-staging"
 
 # Show the recipe list (default when you just run `just`).
 default:
@@ -37,63 +36,120 @@ default:
 # First-time setup
 # ----------------------------------------------------------------------------
 
-# One-time: add Flathub and install the runtime + SDK the manifest asks for.
+# One-time: pacman-install GTK4 + libadwaita + PyGObject + blueprint-compiler
+# (all as prebuilt MSYS2 UCRT64 packages -- no compiling GTK from source),
+# and create the dev venv. Needs MSYS2 first, with its usr/bin and ucrt64/bin
+# on PATH -- see docs/windows-setup.md.
 init:
-    flatpak remote-add --if-not-exists --user \
-        flathub https://flathub.org/repo/flathub.flatpakrepo
-    flatpak-builder --install-deps-from=flathub --install-deps-only --user \
-        "{{fp-builddir}}" "{{manifest}}"
-    # --system-site-packages: PyGObject (gi) comes from apt (python3-gi), not pip.
-    python3 -m venv --clear --system-site-packages .venv
-    .venv/bin/pip install -r requirements.txt
-    .venv/bin/pip install --no-deps PyGObject-stubs
+    #!/usr/bin/env bash
+    set -euo pipefail
+    pacman -S --needed --noconfirm \
+        mingw-w64-ucrt-x86_64-gtk4 \
+        mingw-w64-ucrt-x86_64-libadwaita \
+        mingw-w64-ucrt-x86_64-python-gobject \
+        mingw-w64-ucrt-x86_64-python-cairo \
+        mingw-w64-ucrt-x86_64-python-pillow \
+        mingw-w64-ucrt-x86_64-blueprint-compiler \
+        mingw-w64-ucrt-x86_64-ruff \
+        mingw-w64-ucrt-x86_64-python-pip
+    # --system-site-packages: gi/cairo/PIL/ruff come from the pacman packages
+    # above, not pip -- pip only needs to add what MSYS2 does not package.
+    "{{ucrt64-dir}}/bin/python.exe" -m venv --clear --system-site-packages .venv
+    .venv/bin/python.exe -m pip install keyring pystray pyright pytest pyinstaller
+    .venv/bin/python.exe -m pip install --no-deps PyGObject-stubs
+
+# Build webview2-gtk (HTML mail rendering/composing) from its own repo,
+# checked out as a sibling directory -- see WEBVIEW2GTK_DIR above. Separate
+# from `init` since it needs that repo to exist first and takes real compile
+# time; re-run this whenever that repo's source changes.
+init-webview2gtk:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export PATH="{{ucrt64-dir}}/bin:$PATH"
+    if [ ! -d "{{webview2gtk-dir}}" ]; then
+        echo "init-webview2gtk: {{webview2gtk-dir}} not found (set WEBVIEW2GTK_DIR or clone it there)" >&2
+        exit 1
+    fi
+    bash "{{webview2gtk-dir}}/scripts/wv2gtk-build.sh" lib \
+        "{{webview2gtk-dir}}/build" "{{webview2gtk-stage}}" \
+        "{{webview2gtk-dir}}/build/libwebview2gtk-1.stamp"
 
 # ----------------------------------------------------------------------------
-# Build & run (Flatpak)
+# Build & run
 # ----------------------------------------------------------------------------
 
-# Build Postcard as a Flatpak from your working tree and install it for your user.
-# --disable-updates: trust already-cloned sources (e.g. blueprint-compiler) instead
-# of re-fetching from upstream on every build. Drop it if you bump a source's tag/commit.
-build: test
-    flatpak-builder --force-clean --user --install --disable-updates \
-        "{{fp-builddir}}" "{{manifest}}"
+# Compile blueprints -> gresource -> gschema. There is no Flatpak sandbox to
+# build inside, so this is the standalone equivalent of what meson's
+# gnome.compile_resources() + install did there.
+build:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export PATH="{{ucrt64-dir}}/bin:$PATH"
+    mkdir -p build/win
+    # blueprint-compiler infers each output's ui/ subdirectory from its input
+    # path relative to the base dir given here -- src, not src/ui, is what
+    # makes each .ui land at build/win/ui/ instead of build/win/, which is
+    # where postcard.gresource.xml expects to find it.
+    blueprint-compiler batch-compile build/win src src/ui/*.blp
+    # Untranslated stand-in for the .metainfo.xml meson's i18n.merge_file()
+    # would produce at a real build. Must exist before glib-compile-resources
+    # runs: postcard.gresource.xml references it.
+    cp data/in.gxanshu.postcard.metainfo.xml.in build/win/in.gxanshu.postcard.metainfo.xml
+    glib-compile-resources --sourcedir=src --sourcedir=build/win \
+        --target=build/win/postcard.gresource src/postcard.gresource.xml
+    mkdir -p build/win/glib-2.0/schemas
+    cp data/in.gxanshu.postcard.gschema.xml build/win/glib-2.0/schemas/
+    glib-compile-schemas build/win/glib-2.0/schemas
 
-# Build, then launch the Flatpak. This is the normal way to run Postcard.
+# Build, then launch WinPostcard from source. tools/win_run.py mirrors
+# postcard.in's own resource-loading.
 run: build
-    flatpak run "{{app-id}}"
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export PATH="{{webview2gtk-stage}}/bin:{{ucrt64-dir}}/bin:$PATH"
+    export GI_TYPELIB_PATH="{{webview2gtk-stage}}/lib/girepository-1.0"
+    export PYTHONPATH="src"
+    export GSETTINGS_SCHEMA_DIR="build/win/glib-2.0/schemas"
+    "{{python}}" tools/win_run.py
 
 # Run with verbose GLib logging (handy for debugging signals/lifecycle).
 run-debug: build
-    flatpak run --env=G_MESSAGES_DEBUG=all "{{app-id}}"
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export PATH="{{webview2gtk-stage}}/bin:{{ucrt64-dir}}/bin:$PATH"
+    export GI_TYPELIB_PATH="{{webview2gtk-stage}}/lib/girepository-1.0"
+    export PYTHONPATH="src"
+    export GSETTINGS_SCHEMA_DIR="build/win/glib-2.0/schemas"
+    export G_MESSAGES_DEBUG=all
+    "{{python}}" tools/win_run.py
 
-# Run with the GTK Inspector open (Ctrl+Shift+D also toggles it at runtime).
-inspect: build
-    flatpak run --env=GTK_DEBUG=interactive "{{app-id}}"
+# Build a standalone build/pkg-dist/WinPostcard/WinPostcard.exe -- no MSYS2,
+# no terminal, no `just run` needed to launch it afterward. Needs `just
+# init-webview2gtk` done at least once first.
+package: build
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export PATH="{{ucrt64-dir}}/bin:$PATH"
+    "{{python}}" tools/win_package.py
 
-# ----------------------------------------------------------------------------
-# Package & lint
-# ----------------------------------------------------------------------------
-
-# Build, export to a local repo, and produce a single-file .flatpak bundle.
-bundle: test
-    flatpak-builder --force-clean --disable-updates --repo="{{fp-repo}}" \
-        "{{fp-builddir}}" "{{manifest}}"
-    flatpak build-bundle "{{fp-repo}}" "{{bundle}}" "{{app-id}}"
-    @echo "Wrote {{bundle}} — install with: flatpak install --user {{bundle}}"
-
-# Lint the manifest (needs org.flatpak.Builder: flatpak install flathub org.flatpak.Builder).
-lint:
-    flatpak run --command=flatpak-builder-lint org.flatpak.Builder manifest "{{manifest}}" \
-        || echo "flatpak-builder-lint not installed (flatpak install flathub org.flatpak.Builder)"
+# Build build/pkg-installer/WinPostcard-Setup.exe -- a per-user installer
+# (Start Menu shortcut, optional desktop icon, uninstaller), no admin rights
+# needed. Needs Inno Setup 6 (winget install JRSoftware.InnoSetup).
+installer: package
+    #!/usr/bin/env bash
+    set -euo pipefail
+    iscc="$LOCALAPPDATA/Programs/Inno Setup 6/ISCC.exe"
+    if [[ ! -f "$iscc" ]]; then
+        echo "installer: Inno Setup not found at $iscc -- winget install JRSoftware.InnoSetup" >&2
+        exit 1
+    fi
+    "$iscc" packaging/WinPostcard.iss
 
 # ----------------------------------------------------------------------------
 # Website
 # ----------------------------------------------------------------------------
 
 # Build web/ into build/site and serve it at http://localhost:8000 (Ctrl+C stops).
-# Runs the same script CI does, version stamped from meson.build, so what you see
-# on localhost is exactly what lands on postcard.gxanshu.in.
 site port="8000":
     sh web/build.sh "{{builddir}}/site"
     @echo "Serving http://localhost:{{port}}"
@@ -105,19 +161,22 @@ site port="8000":
 
 # Format the codebase with ruff.
 fmt:
-    {{python}} -m ruff format src tests
+    ruff format src tests tools
 
 # Lint, format-check and type-check the Python source. Enforces
 # .claude/skills/coding-standards — see [tool.ruff.lint] in pyproject.toml.
 check:
-    {{python}} -m ruff check src tests
-    {{python}} -m ruff format --check src tests
+    ruff check src tests tools
+    ruff format --check src tests tools
     {{python}} -m pyright src/postcard
 
-# `build` and `bundle` depend on `test`, so gating `test` on `check` means a
-# lint or type error blocks the Flatpak build too.
+# Run the test suite against the UCRT64 GTK stack (see docs/windows-setup.md).
 test *ARGS: check
-    {{python}} -m pytest {{ARGS}}
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export PATH="{{webview2gtk-stage}}/bin:{{ucrt64-dir}}/bin:$PATH"
+    export GI_TYPELIB_PATH="{{webview2gtk-stage}}/lib/girepository-1.0"
+    "{{python}}" -m pytest {{ARGS}}
 
 # Regenerate the .pot translation template. Opt-in dev tool: needs `meson`,
 # `ninja`, and `gettext` on the host (not required for `build`/`run`).
@@ -131,6 +190,6 @@ pot:
     fi
     ninja -C "{{builddir}}" postcard-pot
 
-# Remove all build artifacts (flatpak + meson + bundle).
+# Remove all build artifacts.
 clean:
-    rm -rf "{{builddir}}" ".flatpak" ".flatpak-builder" postcard-*.flatpak
+    rm -rf "{{builddir}}"

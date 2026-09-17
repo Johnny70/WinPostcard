@@ -43,7 +43,6 @@ class Account(GObject.Object):
         imap_security: str = "tls",
         smtp_security: str = "tls",
         username: str = "",
-        goa_id: str = "",
     ) -> None:
         super().__init__()
         self.id: int = id
@@ -58,9 +57,6 @@ class Account(GObject.Object):
         # The name the server wants at sign-in, when that is not the address the
         # mail is addressed to. Empty means the two are the same.
         self.username: str = username
-        # Set when the account came from GNOME Online Accounts, which is then
-        # where its credentials live instead of the keyring.
-        self.goa_id: str = goa_id
 
     @property
     def short_label(self) -> str:

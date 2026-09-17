@@ -1,7 +1,7 @@
 import logging
 from gettext import gettext as _
 
-from gi.repository import Adw, Gio, GLib, Gtk
+from gi.repository import Adw, Gio, Gtk
 
 from .core import autostart
 from .window_types import SETTING_SYNC_INTERVAL
@@ -22,13 +22,8 @@ SYNC_INTERVALS: tuple[tuple[int, str], ...] = (
 # Used when the stored value isn't one of the offered intervals.
 DEFAULT_SYNC_INTERVAL_MINUTES = 15
 
-# The Background portal owns the autostart .desktop file where it exists, and
-# core.autostart writes it on the desktops that have no such portal. Neither can
-# be read back, so the "start-at-login" key is our record of what was last set.
-PORTAL_NAME = "org.freedesktop.portal.Desktop"
-PORTAL_PATH = "/org/freedesktop/portal/desktop"
-BACKGROUND_INTERFACE = "org.freedesktop.portal.Background"
-REQUEST_INTERFACE = "org.freedesktop.portal.Request"
+# The registry has no way to read back "did this actually take", so this key
+# is our own record of what was last set.
 SETTING_START_AT_LOGIN = "start-at-login"
 
 
@@ -74,9 +69,6 @@ class PostcardPreferencesDialog(Adw.PreferencesDialog):
         )
         self.interval_row.connect("notify::selected", self._on_interval_changed)
 
-        # Not bound to GSettings: the portal decides, and the key only
-        # records its answer, so the row follows the reply rather than the click.
-        self._autostart_subscription: int | None = None
         self.autostart_row.set_active(settings.get_boolean(SETTING_START_AT_LOGIN))
         self.autostart_row.connect("notify::active", self._on_autostart_toggled)
 
@@ -101,118 +93,17 @@ class PostcardPreferencesDialog(Adw.PreferencesDialog):
 
     def _on_autostart_toggled(self, row: Adw.SwitchRow, _param: object) -> None:
         is_wanted = row.get_active()
-        # Also the exit for the row being put back after a refused request.
         if is_wanted == self._settings.get_boolean(SETTING_START_AT_LOGIN):
             return
-        # A second request before the first answer would leave the row showing
-        # the losing one, so the row waits until the portal has replied.
-        row.set_sensitive(False)
         try:
-            self._request_autostart(is_wanted)
-        except GLib.Error:
-            logger.info("no background portal, writing the autostart entry instead")
-            self._write_autostart_entry(is_wanted)
-
-    def _request_autostart(self, is_wanted: bool) -> None:
-        bus = Gio.bus_get_sync(Gio.BusType.SESSION)
-        # The reply comes back as a signal on a path derived from the token, so
-        # subscribe before asking -- the portal may answer immediately.
-        token = "postcard_" + GLib.uuid_string_random().replace("-", "_")
-        sender = (bus.get_unique_name() or "").removeprefix(":").replace(".", "_")
-        self._autostart_subscription = bus.signal_subscribe(
-            PORTAL_NAME,
-            REQUEST_INTERFACE,
-            "Response",
-            f"{PORTAL_PATH}/request/{sender}/{token}",
-            None,
-            Gio.DBusSignalFlags.NONE,
-            self._on_autostart_response,
-            None,
-        )
-        options = {
-            "handle_token": GLib.Variant("s", token),
-            "reason": GLib.Variant(
-                "s", _("Postcard checks for new mail after you log in.")
-            ),
-            "autostart": GLib.Variant("b", is_wanted),
-            # Becomes the Exec line of the autostart entry the portal writes.
-            "commandline": GLib.Variant("as", ["postcard", "--hidden"]),
-        }
-        bus.call(
-            PORTAL_NAME,
-            PORTAL_PATH,
-            BACKGROUND_INTERFACE,
-            "RequestBackground",
-            GLib.Variant("(sa{sv})", ("", options)),
-            None,
-            Gio.DBusCallFlags.NONE,
-            -1,
-            None,
-            self._on_autostart_requested,
-            None,
-        )
-
-    def _on_autostart_requested(
-        self, bus: Gio.DBusConnection, result: Gio.AsyncResult, _data: object
-    ) -> None:
-        try:
-            bus.call_finish(result)
-        except GLib.Error:
-            logger.info("background portal refused, writing the autostart entry")
-            self._write_autostart_entry(self.autostart_row.get_active())
-
-    def _write_autostart_entry(self, is_wanted: bool) -> None:
-        """Fallback for desktops whose portal has no Background backend."""
-        directory = autostart.user_directory()
-        try:
-            autostart.set_entry(directory, is_enabled=is_wanted)
+            autostart.set_enabled(is_wanted)
         except OSError:
-            logger.exception("could not update the autostart entry in %s", directory)
-            self._settle_autostart(
-                self._settings.get_boolean(SETTING_START_AT_LOGIN),
-                _("Could not change whether Postcard starts at login."),
+            logger.exception("could not update the autostart entry")
+            row.set_active(self._settings.get_boolean(SETTING_START_AT_LOGIN))
+            self.add_toast(
+                Adw.Toast(
+                    title=_("Could not change whether WinPostcard starts at login.")
+                )
             )
             return
-        self._settle_autostart(is_wanted, "")
-
-    def _on_autostart_response(
-        self,
-        _bus: Gio.DBusConnection,
-        _sender: str,
-        _path: str,
-        _interface: str,
-        _signal: str,
-        parameters: GLib.Variant,
-        _data: object,
-    ) -> None:
-        response, results = parameters.unpack()
-        is_wanted = self.autostart_row.get_active()
-        # A non-zero response is a cancel or a failure: nothing was changed.
-        is_enabled = (
-            bool(results.get("autostart"))
-            if response == 0
-            else self._settings.get_boolean(SETTING_START_AT_LOGIN)
-        )
-        message = ""
-        if is_enabled != is_wanted:
-            logger.warning(
-                "background portal did not set autostart to %s (response %d)",
-                is_wanted,
-                response,
-            )
-            message = _("Could not change whether Postcard starts at login.")
-        self._settle_autostart(is_enabled, message)
-
-    def _settle_autostart(self, is_enabled: bool, message: str) -> None:
-        """Record what the portal actually did and match the row to it."""
-        if self._autostart_subscription is not None:
-            Gio.bus_get_sync(Gio.BusType.SESSION).signal_unsubscribe(
-                self._autostart_subscription
-            )
-            self._autostart_subscription = None
-        # Before the row, so the notify handler sees them agree and stops.
-        self._settings.set_boolean(SETTING_START_AT_LOGIN, is_enabled)
-        self.autostart_row.set_active(is_enabled)
-        self.autostart_row.set_sensitive(True)
-        if message:
-            self.add_toast(Adw.Toast(title=message))
+        self._settings.set_boolean(SETTING_START_AT_LOGIN, is_wanted)

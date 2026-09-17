@@ -5,9 +5,7 @@ __pycache__/
 
 # Build artifacts
 /build
-/.flatpak
-/.flatpak-builder
-*.flatpak
+*.spec
 
 # AI
 opencode.jsonc

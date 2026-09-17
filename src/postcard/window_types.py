@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 from .core.models.account import Account
 from .core.models.folder import Folder
+from .mail_sync import RECENT_LIMIT
 
 # GSettings key for the poll interval. Named here rather than in
 # preferences_dialog because the window schedules the timer from it and the
@@ -44,6 +45,23 @@ PAGE_LOADING = "loading"
 # might mutate underneath it. Frozen so that is enforced rather than hoped for
 # -- which is also why uids is a tuple: frozen only blocks rebinding the field,
 # so a list there would still be mutable from the main thread.
+
+
+@dataclass(frozen=True, slots=True)
+class SyncOptions:
+    """Optional _start_sync/_sync_worker parameters, grouped into one object
+    rather than four separate keyword args to stay under this project's
+    5-argument limit (see pyproject.toml's max-args)."""
+
+    folder_name: str | None = None
+    offset: int = 0
+    should_count_unread: bool = True
+    limit: int = RECENT_LIMIT
+
+
+# A shared instance for "no options given", instead of a call in a default
+# argument (ruff B008) -- frozen, so sharing it between callers is safe.
+DEFAULT_SYNC_OPTIONS = SyncOptions()
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,3 +114,16 @@ class PendingMove:
     source: Folder
     dest: Folder
     tombstones: list[tuple[int, str]]
+
+
+@dataclass(frozen=True, slots=True)
+class RuleMove:
+    """Mail moved locally the moment a rule matches it, with the real IMAP
+    MOVE run right after -- no undo window, unlike a manual archive/trash/
+    move: the user set this rule up to always happen."""
+
+    account: Account
+    email_ids: tuple[int, ...]
+    uids: tuple[str, ...]
+    source: Folder
+    dest: Folder

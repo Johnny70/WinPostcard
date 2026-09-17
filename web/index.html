@@ -4,22 +4,22 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
-<title>Postcard - a modern email client for GNOME</title>
-<meta name="description" content="Postcard is a modern email client for GNOME. GTK 4, libadwaita, IMAP/SMTP and GNOME Online Accounts, a unified inbox, offline search, and one click unsubscribe. Install the Flatpak in one click.">
-<meta name="keywords" content="email client for GNOME, best email client for GNOME, GNOME mail app, GTK4 email client, libadwaita mail, Linux IMAP client, Flatpak email client, unified inbox, one click unsubscribe">
-<link rel="canonical" href="https://postcard.gxanshu.in/">
+<title>WinPostcard - a Windows email client</title>
+<meta name="description" content="WinPostcard is a Windows email client written in Python, built with GTK 4 and libadwaita. Multiple IMAP/SMTP accounts, a unified inbox, offline full-text search, and one click unsubscribe.">
+<meta name="keywords" content="Windows email client, GTK4 email client for Windows, libadwaita mail client, Windows IMAP client, Windows SMTP client, unified inbox, one click unsubscribe, Python email client">
+<link rel="canonical" href="https://johnnyjakobsson.com/">
 
-<meta property="og:title" content="Postcard — a modern email client for GNOME">
-<meta property="og:description" content="A native GNOME mail app on GTK 4 and libadwaita. A unified inbox, conversations, offline search, GNOME Online Accounts. Free and GPL-3.0.">
+<meta property="og:title" content="WinPostcard — a Windows email client">
+<meta property="og:description" content="A native mail app for Windows on GTK 4 and libadwaita. A unified inbox, conversations, offline search, one click unsubscribe. Free and GPL-3.0.">
 <meta property="og:type" content="website">
-<meta property="og:url" content="https://postcard.gxanshu.in/">
-<meta property="og:image" content="https://postcard.gxanshu.in/img/og.png">
+<meta property="og:url" content="https://johnnyjakobsson.com/">
+<meta property="og:image" content="https://johnnyjakobsson.com/img/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Postcard — a modern email client for GNOME">
-<meta name="twitter:description" content="A native GNOME mail app on GTK 4 and libadwaita. A unified inbox, conversations, offline search, GNOME Online Accounts. Free and GPL-3.0.">
-<meta name="twitter:image" content="https://postcard.gxanshu.in/img/og.png">
+<meta name="twitter:title" content="WinPostcard — a Windows email client">
+<meta name="twitter:description" content="A native mail app for Windows on GTK 4 and libadwaita. A unified inbox, conversations, offline search, one click unsubscribe. Free and GPL-3.0.">
+<meta name="twitter:image" content="https://johnnyjakobsson.com/img/og.png">
 
 <link rel="icon" href="icon.png">
 <link rel="apple-touch-icon" href="icon.png">
@@ -298,13 +298,12 @@ pre{
 }
 </style>
 
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Postcard","applicationCategory":"CommunicationApplication","applicationSubCategory":"Email Client","operatingSystem":"Linux, GNOME","softwareVersion":"__VERSION__","url":"https://postcard.gxanshu.in/","license":"https://www.gnu.org/licenses/gpl-3.0.html","description":"A modern email client for GNOME, built on GTK 4, libadwaita and Python. IMAP/SMTP, GNOME Online Accounts, a unified inbox, offline full-text search and one click unsubscribe.","downloadUrl":"https://github.com/gxanshu/postcard/releases/latest/download/postcard.flatpakref","screenshot":"https://postcard.gxanshu.in/img/og.png","author":{"@type":"Person","name":"Anshu","url":"https://github.com/gxanshu"},"offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"WinPostcard","applicationCategory":"CommunicationApplication","applicationSubCategory":"Email Client","operatingSystem":"Windows","softwareVersion":"__VERSION__","url":"https://johnnyjakobsson.com/","license":"https://www.gnu.org/licenses/gpl-3.0.html","description":"A Windows email client written in Python, built on GTK 4 and libadwaita. IMAP/SMTP, a unified inbox, offline full-text search and one click unsubscribe.","screenshot":"https://johnnyjakobsson.com/img/og.png","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}}</script>
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[
-{"@type":"Question","name":"Is Postcard on Flathub?","acceptedAnswer":{"@type":"Answer","text":"No. It installs as a Flatpak from the project's GitHub releases, and flatpak update keeps it current like any other app."}},
-{"@type":"Question","name":"Does it work outside GNOME?","acceptedAnswer":{"@type":"Answer","text":"Yes. KDE, Xfce, anywhere Flatpak runs. GNOME just fits best, because Online Accounts, notifications, the keyring and the dark style all come for free."}},
-{"@type":"Question","name":"Which mail providers work?","acceptedAnswer":{"@type":"Answer","text":"Anything with IMAP and SMTP. Gmail, Fastmail, Zoho, Proton Mail Bridge, a mailbox on your own server. A Google account already in GNOME Settings is picked up without a password."}},
+{"@type":"Question","name":"Is there a packaged installer?","acceptedAnswer":{"@type":"Answer","text":"Not yet. For now, build it from source with just init, just build and just run -- see the Install section below. A packaged installer is planned."}},
+{"@type":"Question","name":"Which mail providers work?","acceptedAnswer":{"@type":"Answer","text":"Anything with IMAP and SMTP. Gmail, Yahoo Mail, Proton Mail Bridge, Fastmail, Zoho, Mailbox.org, Migadu, a mailbox on your own server. Outlook, Hotmail and Microsoft 365 are not supported yet -- Microsoft requires OAuth 2.0, which is planned."}},
 {"@type":"Question","name":"What does it cost?","acceptedAnswer":{"@type":"Answer","text":"Nothing. GPL-3.0-or-later, no account to make, no telemetry. Your mail stays on your machine and your server."}},
-{"@type":"Question","name":"Can it start with my session?","acceptedAnswer":{"@type":"Answer","text":"Yes. Turn on Keep running in the background and Start at Login in Preferences. Postcard starts with no window, checks for mail on your sync interval and notifies you when something arrives."}},
+{"@type":"Question","name":"Can it start when Windows logs in?","acceptedAnswer":{"@type":"Answer","text":"Yes. Turn on Keep running in the background and Start at Login in Preferences. WinPostcard writes a Run entry to your user registry hive, starts with no window, checks for mail on your sync interval and notifies you when something arrives."}},
 {"@type":"Question","name":"Is it ready for my main inbox?","acceptedAnswer":{"@type":"Answer","text":"I read my own mail in it every day, but it is still early. Keep your old client around for a week or two and file anything that breaks."}}]}</script>
 </head>
 
@@ -314,14 +313,14 @@ pre{
 
 <header class="site-head">
   <nav class="wrap" aria-label="Main">
-    <img src="icon.png" alt="Postcard app icon" width="28" height="28" style="width:28px;height:28px;">
-    <span class="brand">Postcard</span>
+    <img src="icon.png" alt="WinPostcard app icon" width="28" height="28" style="width:28px;height:28px;">
+    <span class="brand">WinPostcard</span>
     <span class="badge">v__VERSION__</span>
     <div class="nav-links">
       <a href="#features">Features</a>
       <a href="#look">Screenshots</a>
       <a href="#faq">FAQ</a>
-      <a href="https://github.com/gxanshu/postcard">Source</a>
+      <a href="https://github.com/Johnny70/WinPostcard">Source</a>
       <a class="pill" href="#install">Install</a>
     </div>
   </nav>
@@ -332,23 +331,23 @@ pre{
 <section class="hero wrap">
   <div class="hero-row">
     <div class="hero-copy">
-      <h1>A modern email client for GNOME.</h1>
-      <p class="lede">Folders on the left, conversations in the middle, the message on the right. The layout you already know, rebuilt on GTK 4 and libadwaita. Nothing new to learn.</p>
+      <h1>A native email client for Windows.</h1>
+      <p class="lede">Folders on the left, conversations in the middle, the message on the right. The classic three-pane layout, built on GTK 4 and libadwaita, running standalone on Windows. Nothing new to learn.</p>
       <div class="hero-actions">
-        <a class="btn btn-primary" href="https://github.com/gxanshu/postcard/releases/latest/download/postcard.flatpakref">Download Postcard</a>
-        <a class="btn btn-flat" href="#install">Other ways to install</a>
+        <a class="btn btn-primary" href="#install">Build it from source</a>
+        <a class="btn btn-flat" href="https://github.com/Johnny70/WinPostcard">View on GitHub</a>
       </div>
       <p class="hero-note">Free and open source. GPL-3.0. No account, no telemetry.</p>
     </div>
     <div class="hero-art">
-      <img src="icon.png" alt="Postcard, a GNOME email client" width="256" height="256" fetchpriority="high">
+      <img src="icon.png" alt="WinPostcard, a Windows email client" width="256" height="256" fetchpriority="high">
     </div>
   </div>
 </section>
 
 <section class="shot-band">
   <div class="inner">
-    <img class="shot" src="img/main-window.webp" width="1867" height="1195" fetchpriority="high" alt="Postcard on GNOME showing every account in one sidebar, the conversation list and the HTML reader">
+    <img class="shot" src="img/main-window.webp" width="1867" height="1195" fetchpriority="high" alt="WinPostcard on Windows showing every account in one sidebar, the conversation list and the HTML reader">
   </div>
 </section>
 
@@ -375,11 +374,11 @@ pre{
       </div>
       <div class="cell">
         <h3>Any IMAP or SMTP account</h3>
-        <p>Gmail, Fastmail, Proton Bridge, your own server. Add as many as you want. Host and port are filled in from your address for the providers people actually use, and passwords go in the system keyring.</p>
+        <p>Gmail, Fastmail, Proton Bridge, your own server. Add as many as you want. Host and port are filled in from your address for the providers people actually use, and passwords go in Windows Credential Manager.</p>
       </div>
       <div class="cell">
         <h3>Trackers stay blocked</h3>
-        <p>HTML mail renders in WebKit with remote images held back until you say so.</p>
+        <p>HTML mail renders via WebView2 (Microsoft Edge) with remote images held back until you say so.</p>
       </div>
       <div class="cell">
         <h3>Drafts that don't vanish</h3>
@@ -387,15 +386,15 @@ pre{
       </div>
       <div class="cell">
         <h3>Leave a mailing list</h3>
-        <p>Lists get a banner with an Unsubscribe button. Where the list supports it, Postcard sends the request itself, after telling you which host it is about to talk to.</p>
+        <p>Lists get a banner with an Unsubscribe button. Where the list supports it, WinPostcard sends the request itself, after telling you which host it is about to talk to.</p>
       </div>
       <div class="cell">
         <h3>Waits in the background</h3>
-        <p>Postcard can start hidden at login, check on your sync interval and notify you when mail lands. The desktop portal writes the autostart entry, so there is no file to edit.</p>
+        <p>WinPostcard can start hidden at login, check on your sync interval and notify you when mail lands. It writes a Run entry to your user registry hive, so there is no file to edit by hand.</p>
       </div>
       <div class="cell">
         <h3>Sits in your tray</h3>
-        <p>On KDE, Xfce and anywhere else with a status area, Postcard leaves an icon behind with the unread count on it. GNOME has no tray, so there it is a Background App instead.</p>
+        <p>WinPostcard leaves an icon in the Windows system tray with an unread count on it, so you can close the window without losing background sync.</p>
       </div>
       <div class="cell">
         <h3>Acts like a desktop app</h3>
@@ -408,26 +407,22 @@ pre{
 <section id="look" class="night">
   <div class="inner">
     <p class="eyebrow">Screenshots</p>
-    <h2>Built to the GNOME HIG.</h2>
-    <p class="lede">Adaptive layouts, boxed lists, real dialogs, and the system dark style everywhere. It fits your desktop because it is built the same way.</p>
+    <h2>Built with GTK 4 and libadwaita.</h2>
+    <p class="lede">Adaptive layouts, boxed lists, real dialogs, and the system dark style, all running natively on Windows via MSYS2's GTK4/libadwaita build.</p>
     <div class="figs">
       <figure>
-        <img src="img/mail-compose.webp" width="900" height="1205" loading="lazy" decoding="async" alt="Composing a new message in Postcard with To, Cc, Bcc fields and a rich text toolbar">
+        <img src="img/mail-compose.webp" width="900" height="1205" loading="lazy" decoding="async" alt="Composing a new message in WinPostcard with To, Cc, Bcc fields and a rich text toolbar">
         <figcaption><strong>Compose.</strong> Rich text, attachments, Cc and Bcc, signature. The window narrows down to phone width.</figcaption>
       </figure>
       <div class="fig-col">
         <figure style="flex:0 1 auto;min-width:0;">
-          <img src="img/online-accounts.webp" width="1400" height="887" loading="lazy" decoding="async" alt="Postcard picking up a Google account from GNOME Online Accounts, with no password to enter">
-          <figcaption><strong>Online Accounts.</strong> Signed in to Google under GNOME Settings? Postcard just uses it. No password prompt.</figcaption>
-        </figure>
-        <figure style="flex:0 1 auto;min-width:0;">
-          <img src="img/preferences.webp" width="1400" height="891" loading="lazy" decoding="async" alt="Postcard preferences dialog with notification, remote image and background sync settings">
+          <img src="img/preferences.webp" width="1400" height="891" loading="lazy" decoding="async" alt="WinPostcard preferences dialog with notification, remote image and background sync settings">
           <figcaption><strong>Preferences.</strong> A short list of switches. Notifications, remote images, sync interval.</figcaption>
         </figure>
       </div>
       <figure style="flex:1 1 100%;">
-        <img src="img/mailing-list-unsubscribe.webp" width="1867" height="1188" loading="lazy" decoding="async" alt="The Postcard reader showing a mailing list banner with an Unsubscribe button, and the dialog naming the host the request goes to">
-        <figcaption><strong>One click unsubscribe.</strong> A newsletter gets a banner across the top of the message. Press the button and Postcard says which host it is about to ask, then asks for you.</figcaption>
+        <img src="img/mailing-list-unsubscribe.webp" width="1867" height="1188" loading="lazy" decoding="async" alt="The WinPostcard reader showing a mailing list banner with an Unsubscribe button, and the dialog naming the host the request goes to">
+        <figcaption><strong>One click unsubscribe.</strong> A newsletter gets a banner across the top of the message. Press the button and WinPostcard says which host it is about to ask, then asks for you.</figcaption>
       </figure>
     </div>
   </div>
@@ -447,7 +442,7 @@ pre{
         <div><strong>Python + stdlib</strong><p>imaplib and smtplib, not a homegrown protocol stack</p></div>
         <div><strong>SQLite</strong><p>One file. Everyone already knows how it fails</p></div>
         <div><strong>libadwaita widgets</strong><p>No custom controls to maintain forever</p></div>
-        <div><strong>Flatpak only</strong><p>One build target, the same on every distro</p></div>
+        <div><strong>Windows only</strong><p>GTK 4 and libadwaita via MSYS2, no Linux build</p></div>
       </div>
     </div>
   </div>
@@ -456,28 +451,30 @@ pre{
 <section id="install" class="install">
   <div class="inner">
     <p class="eyebrow">Install · v__VERSION__</p>
-    <h2>Two ways in. Pick one.</h2>
-    <p class="lede">Postcard ships as a Flatpak straight from its GitHub releases. It is not on Flathub. You need <a href="https://flatpak.org/setup/">Flatpak</a>, which most GNOME distros already have.</p>
+    <h2>There's no packaged installer yet.</h2>
+    <p class="lede">A per-user installer is planned. Until then, WinPostcard runs from a source checkout. GTK 4, libadwaita and PyGObject come from <a href="https://www.msys2.org/">MSYS2</a>'s UCRT64 packages, and everything else goes through <span class="mono" style="font-size:14px;">just</span>.</p>
     <div class="cards">
 
       <div class="card card-pick">
         <span class="tag">Recommended</span>
-        <h3>Download and open it</h3>
-        <p class="fill">You get a small file called <span class="mono" style="font-size:13.5px;">postcard.flatpakref</span>. Open it once it lands and GNOME Software takes over, or whatever app centre your desktop uses. Look it over, hit Install, done.</p>
-        <a class="btn btn-primary btn-block" href="https://github.com/gxanshu/postcard/releases/latest/download/postcard.flatpakref" download="postcard.flatpakref">Download Postcard</a>
-        <p class="after">Open it from your browser downloads, or find it in Files and double click.</p>
+        <h3>Build from source</h3>
+        <p class="fill">See <span class="mono" style="font-size:13.5px;">docs/windows-setup.md</span> in the repo for the one-time MSYS2 prerequisites, then:</p>
+        <pre id="cmd">just init  # one-time: pacman-install GTK4/libadwaita/PyGObject
+just build # compile blueprints -> gresource -> gschema
+just run   # build, then launch</pre>
+        <button class="btn btn-flat btn-block" id="copy" type="button" style="font-size:15px;">Copy commands</button>
+        <p class="after">Needs <a href="https://github.com/casey/just">just</a> and a Windows machine.</p>
       </div>
 
       <div class="card">
-        <span class="tag">Terminal</span>
-        <h3>One command</h3>
-        <p style="margin-bottom:18px;">Same package, no clicking. Works over SSH too.</p>
-        <pre id="cmd">flatpak install --from https://github.com/gxanshu/postcard/releases/latest/download/postcard.flatpakref</pre>
-        <button class="btn btn-flat btn-block" id="copy" type="button" style="font-size:15px;">Copy command</button>
+        <span class="tag">Read first</span>
+        <h3>Windows setup guide</h3>
+        <p class="fill">The one-time MSYS2 install, the venv, and where things can go wrong — written out step by step.</p>
+        <a class="btn btn-flat btn-block" href="https://github.com/Johnny70/WinPostcard/blob/main/docs/windows-setup.md">Read docs/windows-setup.md</a>
       </div>
 
     </div>
-    <p class="foot-note">After the first install Postcard shows up in your app grid like anything else, and <span class="mono" style="font-size:13px;">flatpak update</span> keeps it current. <a href="https://github.com/gxanshu/postcard/releases">Browse all releases →</a></p>
+    <p class="foot-note">WinPostcard is young and changes often — build from the <span class="mono" style="font-size:13px;">main</span> branch rather than waiting for a tagged release. <a href="https://github.com/Johnny70/WinPostcard/releases">Browse releases →</a></p>
   </div>
 </section>
 
@@ -486,21 +483,20 @@ pre{
     <div class="split-main">
       <p class="eyebrow">Before you install</p>
       <h2>Written in the open, awkward parts included.</h2>
-      <p>Postcard is under heavy development. It has bugs and rough edges. A bug report is the fastest way to get them fixed.</p>
+      <p>WinPostcard is under heavy development. It has bugs and rough edges. A bug report is the fastest way to get them fixed.</p>
       <p>AI tools help me type this code. That is written in the README rather than hidden away. The architecture, the review and the responsibility are mine, and every line was read before it shipped. Read the source and judge for yourself.</p>
-      <p>Postcard is free and always will be. If it saves you time, sponsoring keeps the work going.</p>
+      <p>WinPostcard is free and always will be.</p>
       <div class="talk-actions">
-        <a class="btn btn-flat" href="https://github.com/sponsors/gxanshu"><span class="heart">♥</span> Sponsor</a>
-        <a class="btn btn-flat" href="https://github.com/gxanshu/postcard/issues">Report an issue</a>
-        <a class="btn btn-flat" href="https://github.com/gxanshu/postcard">Read the source</a>
+        <a class="btn btn-flat" href="https://github.com/Johnny70/WinPostcard/issues">Report an issue</a>
+        <a class="btn btn-flat" href="https://github.com/Johnny70/WinPostcard">Read the source</a>
       </div>
     </div>
     <div class="split-side">
       <div class="spec">
         <div><span>Licence</span><span>GPL-3.0-or-later</span></div>
         <div><span>Stack</span><span>GTK 4 · libadwaita · Python</span></div>
-        <div><span>HTML mail</span><span>WebKitGTK</span></div>
-        <div><span>Credentials</span><span>libsecret keyring</span></div>
+        <div><span>HTML mail</span><span>WebView2 (Edge)</span></div>
+        <div><span>Credentials</span><span>Windows Credential Manager</span></div>
         <div><span>Search index</span><span>SQLite FTS5</span></div>
       </div>
     </div>
@@ -514,24 +510,20 @@ pre{
     </div>
     <div class="faq-list">
       <div>
-        <h3>Is Postcard on Flathub?</h3>
-        <p>No. It installs as a Flatpak from the project's GitHub releases, and <span class="mono" style="font-size:14px;">flatpak update</span> keeps it current like any other app.</p>
-      </div>
-      <div>
-        <h3>Does it work outside GNOME?</h3>
-        <p>Yes. KDE, Xfce, anywhere Flatpak runs, with a tray icon and unread badge on the desktops that have a status area. GNOME just fits best, because Online Accounts, notifications, the keyring and the dark style all come for free.</p>
+        <h3>Is there a packaged installer?</h3>
+        <p>Not yet. For now, build it from source with <span class="mono" style="font-size:14px;">just init</span>, <span class="mono" style="font-size:14px;">just build</span> and <span class="mono" style="font-size:14px;">just run</span> — see <a href="#install">Install</a> above. A packaged installer is planned.</p>
       </div>
       <div>
         <h3>Which mail providers work?</h3>
-        <p>Anything with IMAP and SMTP. Gmail, Fastmail, Zoho, Proton Mail Bridge, a mailbox on your own server. A Google account already in GNOME Settings is picked up without a password.</p>
+        <p>Anything with IMAP and SMTP. Gmail, Yahoo Mail, Proton Mail Bridge, Fastmail, Zoho, Mailbox.org, Migadu, a mailbox on your own server. Outlook, Hotmail and Microsoft 365 aren't supported yet — Microsoft requires OAuth 2.0, which is planned.</p>
       </div>
       <div>
         <h3>What does it cost?</h3>
         <p>Nothing. GPL-3.0-or-later, no account to make, no telemetry. Your mail stays on your machine and your server.</p>
       </div>
       <div>
-        <h3>Can it start with my session?</h3>
-        <p>Yes. Turn on <strong>Keep running in the background</strong> and <strong>Start at Login</strong> in Preferences. Postcard comes up with no window, checks on your sync interval, and notifies you when mail arrives. Click the notification to open it.</p>
+        <h3>Can it start when Windows logs in?</h3>
+        <p>Yes. Turn on <strong>Keep running in the background</strong> and <strong>Start at Login</strong> in Preferences. WinPostcard writes a <span class="mono" style="font-size:14px;">Run</span> entry to your user registry hive, comes up with no window, checks on your sync interval, and notifies you when mail arrives. Click the notification to open it.</p>
       </div>
       <div>
         <h3>Is it ready for my main inbox?</h3>
@@ -545,8 +537,8 @@ pre{
   <div class="inner">
     <img src="icon.png" alt="" width="72" height="72" loading="lazy" style="width:72px;height:72px;">
     <h2>Give your inbox a native home.</h2>
-    <p>One click, about thirty seconds, and it is in your app grid.</p>
-    <a class="btn btn-primary" href="https://github.com/gxanshu/postcard/releases/latest/download/postcard.flatpakref" style="font-size:17px;padding:15px 32px;">Download Postcard v__VERSION__</a>
+    <p>Free, open source, and built to feel like it belongs on your desktop.</p>
+    <a class="btn btn-primary" href="https://github.com/Johnny70/WinPostcard" style="font-size:17px;padding:15px 32px;">Get WinPostcard v__VERSION__</a>
   </div>
 </section>
 
@@ -554,13 +546,12 @@ pre{
 
 <footer class="site-foot">
   <div class="inner">
-    <span>Postcard, an email client for GNOME. Made by <a href="https://github.com/gxanshu" style="color:#c8c6c3;">Anshu</a>.</span>
+    <span>WinPostcard, a Windows email client.</span>
     <span class="links">
-      <a href="https://github.com/gxanshu/postcard">GitHub</a>
-      <a href="https://github.com/sponsors/gxanshu">Sponsor</a>
-      <a href="https://github.com/gxanshu/postcard/releases">Releases</a>
-      <a href="https://github.com/gxanshu/postcard/issues">Issues</a>
-      <a href="https://github.com/gxanshu/postcard/blob/main/COPYING">GPL-3.0</a>
+      <a href="https://github.com/Johnny70/WinPostcard">GitHub</a>
+      <a href="https://github.com/Johnny70/WinPostcard/releases">Releases</a>
+      <a href="https://github.com/Johnny70/WinPostcard/issues">Issues</a>
+      <a href="https://github.com/Johnny70/WinPostcard/blob/main/COPYING">GPL-3.0</a>
     </span>
   </div>
 </footer>

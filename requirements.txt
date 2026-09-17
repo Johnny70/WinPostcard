@@ -2,3 +2,9 @@
 ruff
 pytest
 pyright
+
+# Windows-only at runtime (core/platform/windows*.py) -- listed unconditionally
+# so linting/tests can import those modules on any host.
+keyring
+pystray
+Pillow

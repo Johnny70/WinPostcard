@@ -1,11 +1,11 @@
 name: Feature request
-description: Suggest something Postcard should do
+description: Suggest something WinPostcard should do
 labels: [feature-request]
 body:
   - type: markdown
     attributes:
       value: |
-        Postcard aims to be a small, classic three-pane mail client, so not
+        WinPostcard aims to be a small, classic three-pane mail client, so not
         every idea will land, but a clear description of the problem behind
         the idea makes it much easier to judge. Answer what you can.
 
@@ -21,7 +21,7 @@ body:
     id: problem
     attributes:
       label: What's the problem?
-      description: What are you trying to do that Postcard makes hard or impossible? Describe the situation, not the solution.
+      description: What are you trying to do that WinPostcard makes hard or impossible? Describe the situation, not the solution.
       placeholder: I get a lot of mailing list mail and I can't tell threads apart in the conversation list without opening each one.
     validations:
       required: true
@@ -29,7 +29,7 @@ body:
   - type: textarea
     id: proposal
     attributes:
-      label: What should Postcard do instead?
+      label: What should WinPostcard do instead?
       description: Your proposed behaviour, as concretely as you can put it.
       placeholder: Show the mailing list name as a small tag on the conversation row, the way the unread dot is shown.
     validations:
@@ -75,7 +75,7 @@ body:
     attributes:
       label: How much does this matter to you?
       options:
-        - Blocking — I can't use Postcard as my main client without it
+        - Blocking — I can't use WinPostcard as my main client without it
         - Annoying — I work around it regularly
         - Nice to have
     validations:
