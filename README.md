@@ -94,7 +94,9 @@ TIP: most providers with 2FA will reject your normal account password over IMAP.
 
 # Installation
 
-There is no installer yet — see [Building from source](#building-from-source) below to run WinPostcard from a checkout. A packaged installer is planned.
+Download `WinPostcard-Setup.exe` from the [latest release](https://github.com/Johnny70/WinPostcard/releases) and run it. It installs per-user (no admin rights needed) and is unsigned, so Windows SmartScreen will warn on first run — click "More info" → "Run anyway".
+
+To run from a checkout instead, see [Building from source](#building-from-source) below.
 
 ## Starting hidden at login
 

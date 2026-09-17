@@ -4,7 +4,7 @@
 ; creating a second Start Menu entry -- never change it.
 
 #define MyAppName "WinPostcard"
-#define MyAppVersion "0.0.0-dev"
+#define MyAppVersion "1.0.0b"
 #define MyAppPublisher "WinPostcard"
 #define MyAppExeName "WinPostcard.exe"
 #define MySourceDir "..\build\pkg-dist\WinPostcard"
