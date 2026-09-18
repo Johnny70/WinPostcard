@@ -76,6 +76,12 @@ class PostcardApplication(Adw.Application):
         )
         self.tray.set_shown(self.settings.get_boolean("run-in-background"))
 
+    def do_shutdown(self) -> None:
+        # Tray.start() leaves a non-daemon thread running; without this the
+        # process never actually exits after the last window closes.
+        self.tray.stop()
+        Adw.Application.do_shutdown(self)
+
     def _on_run_in_background_changed(self, settings: Gio.Settings, key: str) -> None:
         self.tray.set_shown(settings.get_boolean(key))
 

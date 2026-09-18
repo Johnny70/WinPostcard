@@ -51,6 +51,20 @@ def test_start_runs_the_icon_detached(monkeypatch):
     assert calls == [1]
 
 
+def test_stop_stops_the_icon(monkeypatch):
+    # Regression: run_detached() leaves a non-daemon thread running that
+    # nothing else stops, so the process outlives every window. stop() is
+    # what application.py's do_shutdown must call to actually let it exit.
+    monkeypatch.setattr(tray, "_icon_file", lambda: None)
+    calls = []
+    icon = tray.Tray(_FakeApp())
+    monkeypatch.setattr(icon._icon, "stop", lambda: calls.append(1))
+
+    icon.stop()
+
+    assert calls == [1]
+
+
 def test_set_shown_toggles_the_icon_visibility(monkeypatch):
     monkeypatch.setattr(tray, "_icon_file", lambda: None)
     icon = tray.Tray(_FakeApp())

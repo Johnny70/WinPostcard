@@ -119,6 +119,17 @@ class Tray:
     def start(self) -> None:
         self._icon.run_detached()
 
+    # run_detached() spawns pystray's Win32 message-loop thread as a plain,
+    # non-daemon threading.Thread -- nothing else ever stops it. Left
+    # uncalled, the process outlives every window and GTK's own shutdown,
+    # invisible (no window, no tray icon if run-in-background is off) and
+    # still holding a lock on the install directory, which is exactly what
+    # the installer's CloseApplications=force then kills. stop() posts a
+    # WM_STOP to the icon's own hidden window, so it is safe to call from
+    # this (GTK main) thread even though the loop runs on another.
+    def stop(self) -> None:
+        self._icon.stop()
+
     def set_shown(self, is_shown: bool) -> None:
         self._icon.visible = is_shown
 
